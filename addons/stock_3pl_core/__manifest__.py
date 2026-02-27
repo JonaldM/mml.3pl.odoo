@@ -1,0 +1,17 @@
+{
+    'name': '3PL Integration Core',
+    'version': '15.0.1.0.0',
+    'category': 'Inventory/Inventory',
+    'summary': 'Forwarder-agnostic 3PL warehousing integration platform',
+    'depends': ['stock', 'sale_management', 'purchase'],
+    'external_dependencies': {'python': ['paramiko']},
+    'data': [
+        'security/ir.model.access.csv',
+        'data/cron.xml',
+        'views/connector_views.xml',
+        'views/message_views.xml',
+        'views/menu.xml',
+    ],
+    'installable': True,
+    'application': False,
+}
