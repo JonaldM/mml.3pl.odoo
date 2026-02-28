@@ -42,7 +42,10 @@ class MFInboundCron(models.AbstractModel):
           - Calls connector.get_transport().poll() to retrieve available files.
           - SFTP poll returns [(filename, content), ...] tuples.
           - REST poll returns [raw_string, ...] (list of raw CSV strings).
-          - Each item is applied via InventoryReportDocument.apply_csv().
+          - Each item is dispatched to the correct document handler:
+              * ACKH_*/ACKL_* filenames or CSV with ClientOrderNumber header
+                → SOAcknowledgementDocument.apply_csv()
+              * Everything else → InventoryReportDocument.apply_csv()
 
         Per-connector, per-file errors are caught and logged — one bad file
         must not prevent other connectors or files from being processed.
@@ -50,6 +53,10 @@ class MFInboundCron(models.AbstractModel):
         from odoo.addons.stock_3pl_mainfreight.document.inventory_report import (
             InventoryReportDocument,
         )
+        from odoo.addons.stock_3pl_mainfreight.document.so_acknowledgement import (
+            SOAcknowledgementDocument,
+        )
+        from odoo.addons.stock_3pl_core.models.message import ThreePlMessage
 
         connectors = self.env['3pl.connector'].search([
             ('active', '=', True),
@@ -95,8 +102,25 @@ class MFInboundCron(models.AbstractModel):
                         skipped += 1
                         continue
 
-                    doc = InventoryReportDocument(connector=connector, env=self.env)
-                    doc.apply_csv(content, report_date=fields.Datetime.now())
+                    # Detect whether this is an ACK file (ACKH/ACKL) or a SOH
+                    # inventory report.  Check filename prefix first (cheap),
+                    # then fall back to header-sniffing via _detect_inbound_type.
+                    basename = filename.upper()
+                    is_ack = basename.startswith('ACKH_') or basename.startswith('ACKL_')
+                    if not is_ack:
+                        is_ack = ThreePlMessage._detect_inbound_type(content) == 'so_acknowledgement'
+
+                    if is_ack:
+                        _logger.info(
+                            'MF inbound: connector=%s file=%s — detected SO Acknowledgement, '
+                            'dispatching to SOAcknowledgementDocument',
+                            connector.name, filename,
+                        )
+                        doc = SOAcknowledgementDocument(connector=connector, env=self.env)
+                        doc.apply_csv(content)
+                    else:
+                        doc = InventoryReportDocument(connector=connector, env=self.env)
+                        doc.apply_csv(content, report_date=fields.Datetime.now())
                     applied += 1
 
                 except Exception as exc:

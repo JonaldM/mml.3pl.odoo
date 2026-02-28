@@ -42,9 +42,18 @@ class SOAcknowledgementDocument(AbstractDocument):
             })
         return rows
 
-    def apply_inbound(self, message):
-        """Apply SO Acknowledgements to Odoo: set picking status to mf_received."""
-        rows = self.parse_inbound(message.payload_csv or message.payload_xml or '')
+    def apply_csv(self, payload):
+        """Apply SO Acknowledgements from a raw CSV string (direct-poll path).
+
+        Counterpart to InventoryReportDocument.apply_csv — accepts a raw CSV
+        string and applies all ACK rows without requiring a queue 3pl.message
+        record.  Keeps the direct-poll path symmetric with the queue path.
+        """
+        rows = self.parse_inbound(payload)
+        self._apply_rows(rows)
+
+    def _apply_rows(self, rows):
+        """Apply a list of parsed ACK dicts to Odoo."""
         for ack in rows:
             order_ref = ack.get('client_order_number')
             if not order_ref:
@@ -65,3 +74,8 @@ class SOAcknowledgementDocument(AbstractDocument):
                 picking.x_mf_status = 'mf_received'
             _logger.info('MF ACK: order %s acknowledged by MF (status: %s)',
                          order_ref, ack.get('order_status'))
+
+    def apply_inbound(self, message):
+        """Apply SO Acknowledgements to Odoo: set picking status to mf_received."""
+        rows = self.parse_inbound(message.payload_csv or message.payload_xml or '')
+        self._apply_rows(rows)
