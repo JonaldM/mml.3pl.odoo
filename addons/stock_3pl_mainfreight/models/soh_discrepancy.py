@@ -99,3 +99,15 @@ class MfSohDiscrepancy(models.Model):
             self.product_id.display_name, self.warehouse_id.name,
             self.odoo_qty, self.mf_qty, self.env.user.name,
         )
+
+    def action_open_accept_wizard(self):
+        """Open the Accept as Shrinkage wizard for this discrepancy."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Accept as Shrinkage',
+            'res_model': 'mf.accept.discrepancy.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_discrepancy_id': self.id},
+        }

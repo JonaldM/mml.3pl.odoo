@@ -126,3 +126,13 @@ class TestSohDiscrepancyModel(unittest.TestCase):
         record.__iter__ = MagicMock(return_value=iter([record]))
         with self.assertRaises(UserError):
             MfSohDiscrepancy.action_mark_investigated(record)
+
+    def test_action_open_accept_wizard_returns_window_action(self):
+        """action_open_accept_wizard returns an ir.actions.act_window dict with correct context."""
+        from odoo.addons.stock_3pl_mainfreight.models.soh_discrepancy import MfSohDiscrepancy
+        record = MagicMock(spec=MfSohDiscrepancy)
+        record.id = 42
+        result = MfSohDiscrepancy.action_open_accept_wizard(record)
+        self.assertEqual(result.get('type'), 'ir.actions.act_window')
+        self.assertEqual(result.get('res_model'), 'mf.accept.discrepancy.wizard')
+        self.assertEqual(result.get('context', {}).get('default_discrepancy_id'), 42)

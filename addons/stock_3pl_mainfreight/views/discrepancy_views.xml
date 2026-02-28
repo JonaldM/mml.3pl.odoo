@@ -64,9 +64,9 @@
                             string="Mark Investigated"
                             type="object"
                             attrs="{'invisible': [('state', '!=', 'open')]}"/>
-                    <button name="%(action_mf_accept_discrepancy_wizard)d"
+                    <button name="action_open_accept_wizard"
                             string="Accept as Shrinkage"
-                            type="action"
+                            type="object"
                             class="btn-warning"
                             attrs="{'invisible': [('state', '=', 'accepted')]}"/>
                     <field name="state" widget="statusbar"
