@@ -8,7 +8,7 @@ import types
 import importlib.util
 import pathlib
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 _BASE = pathlib.Path(__file__).parent.parent / 'models'
@@ -58,15 +58,122 @@ class TestQueueMFSalesOrderNoConnector(unittest.TestCase):
         mock_env = MagicMock()
         mock_env.__getitem__ = MagicMock(side_effect=env_lookup)
         instance.env = mock_env
+        instance.ensure_one = MagicMock()
+        instance.warehouse_id = MagicMock()
+        instance.warehouse_id.id = 1
+        instance.name = 'SO001'
+        instance.id = 1
 
-        mock_order = MagicMock()
-        mock_order.warehouse_id.id = 1
-        mock_order.name = 'SO001'
-
-        # Call the method under test
-        instance._queue_mf_sales_order(mock_order)
+        # Call the method under test (no argument — operates on self)
+        instance._queue_mf_sales_order()
 
         # create should never have been called — early return on no connector
+        mock_message_model.create.assert_not_called()
+
+
+def _make_so_module_stub(mock_doc_instance):
+    """Return a stub sys.modules entry for the sales_order document module."""
+    import unittest.mock as um
+    mock_so_module = types.ModuleType(
+        'odoo.addons.stock_3pl_mainfreight.document.sales_order'
+    )
+    mock_so_module.SalesOrderDocument = um.MagicMock(return_value=mock_doc_instance)
+    return mock_so_module
+
+
+class TestQueueMFSalesOrderHappyPath(unittest.TestCase):
+
+    def test_queue_mf_sales_order_creates_message_when_connector_found(self):
+        """Happy path: connector found, no existing message → 3pl.message.create called."""
+        # Return a single MagicMock (truthy, has .id) to simulate limit=1 recordset
+        mock_connector = MagicMock()
+        mock_connector.id = 10
+        mock_connector.name = 'MF Test'
+
+        mock_doc = MagicMock()
+        mock_doc.get_idempotency_key.return_value = 'ikey123'
+        mock_doc.build_outbound.return_value = '<Order/>'
+
+        mock_message_model = MagicMock()
+        # idempotency search returns falsy (no existing message)
+        empty = MagicMock()
+        empty.__bool__ = MagicMock(return_value=False)
+        mock_message_model.search.return_value = empty
+
+        def env_lookup(key):
+            if key == '3pl.connector':
+                mock_connector_model = MagicMock()
+                mock_connector_model.search.return_value = mock_connector
+                return mock_connector_model
+            if key == '3pl.message':
+                return mock_message_model
+            return MagicMock()
+
+        mock_env = MagicMock()
+        mock_env.__getitem__ = MagicMock(side_effect=env_lookup)
+
+        instance = SaleOrderMF.__new__(SaleOrderMF)
+        instance.env = mock_env
+        instance.ensure_one = MagicMock()
+        instance.warehouse_id = MagicMock()
+        instance.warehouse_id.id = 1
+        instance.name = 'S00001'
+        instance.id = 42
+
+        mock_so_module = _make_so_module_stub(mock_doc)
+        import unittest.mock as um
+        with um.patch.dict(sys.modules, {
+            'odoo.addons.stock_3pl_mainfreight.document.sales_order': mock_so_module,
+        }):
+            instance._queue_mf_sales_order()
+
+        mock_message_model.create.assert_called_once()
+        call_kwargs = mock_message_model.create.call_args[0][0]
+        self.assertEqual(call_kwargs['state'], 'queued')
+        self.assertEqual(call_kwargs['document_type'], 'sales_order')
+
+    def test_queue_mf_sales_order_idempotency_skips_if_message_exists(self):
+        """Idempotency: existing non-dead message → create NOT called."""
+        # Return a single MagicMock (truthy, has .id) to simulate limit=1 recordset
+        mock_connector = MagicMock()
+        mock_connector.id = 10
+
+        mock_doc = MagicMock()
+        mock_doc.get_idempotency_key.return_value = 'ikey123'
+
+        mock_message_model = MagicMock()
+        # existing message found — truthy recordset
+        existing = MagicMock()
+        existing.__bool__ = MagicMock(return_value=True)
+        mock_message_model.search.return_value = existing
+
+        def env_lookup(key):
+            if key == '3pl.connector':
+                mock_connector_model = MagicMock()
+                mock_connector_model.search.return_value = mock_connector
+                return mock_connector_model
+            if key == '3pl.message':
+                return mock_message_model
+            return MagicMock()
+
+        mock_env = MagicMock()
+        mock_env.__getitem__ = MagicMock(side_effect=env_lookup)
+
+        instance = SaleOrderMF.__new__(SaleOrderMF)
+        instance.env = mock_env
+        instance.ensure_one = MagicMock()
+        instance.warehouse_id = MagicMock()
+        instance.warehouse_id.id = 1
+        instance.name = 'S00001'
+        instance.id = 42
+
+        mock_so_module = _make_so_module_stub(mock_doc)
+        import unittest.mock as um
+        with um.patch.dict(sys.modules, {
+            'odoo.addons.stock_3pl_mainfreight.document.sales_order': mock_so_module,
+        }):
+            instance._queue_mf_sales_order()
+
         mock_message_model.create.assert_not_called()
 
 

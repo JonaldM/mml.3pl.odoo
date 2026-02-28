@@ -23,7 +23,7 @@ def _stub_odoo():
 
         def __set_name__(self, owner, name):
             self._name = name
-            if not hasattr(owner, '_fields_meta'):
+            if '_fields_meta' not in owner.__dict__:
                 owner._fields_meta = {}
             owner._fields_meta[name] = self
 

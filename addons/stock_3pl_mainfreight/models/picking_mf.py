@@ -24,13 +24,13 @@ MF_ROUTED_BY = [
 class StockPickingMF(models.Model):
     _inherit = 'stock.picking'
 
-    x_mf_status = fields.Selection(MF_STATUS, 'MF Status', default='draft', index=True)
-    x_mf_connote = fields.Char('Connote No.')
-    x_mf_pick_id = fields.Char('MF Pick ID')
-    x_mf_pod_url = fields.Char('POD URL')
-    x_mf_signed_by = fields.Char('Signed By')
-    x_mf_dispatched_date = fields.Datetime('Dispatched Date')
-    x_mf_delivered_date = fields.Datetime('Delivered Date')
+    x_mf_status = fields.Selection(MF_STATUS, 'MF Status', default='draft', index=True, copy=False)
+    x_mf_connote = fields.Char('Connote No.', copy=False)
+    x_mf_pick_id = fields.Char('MF Pick ID', copy=False)
+    x_mf_pod_url = fields.Char('POD URL', copy=False)
+    x_mf_signed_by = fields.Char('Signed By', copy=False)
+    x_mf_dispatched_date = fields.Datetime('Dispatched Date', copy=False)
+    x_mf_delivered_date = fields.Datetime('Delivered Date', copy=False)
     # Sprint 2 routing fields — declared here to avoid migration on routing engine rollout
-    x_mf_routed_by = fields.Selection(MF_ROUTED_BY, 'Routing Method', readonly=True)
+    x_mf_routed_by = fields.Selection(MF_ROUTED_BY, 'Routing Method', readonly=True, copy=False)
     x_mf_cross_border = fields.Boolean('Cross-Border', default=False)
