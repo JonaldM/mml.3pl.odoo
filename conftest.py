@@ -32,7 +32,7 @@ def _install_odoo_stubs():
 
         def __set_name__(self, owner, name):
             self._attr_name = name
-            if not hasattr(owner, '_fields_meta'):
+            if '_fields_meta' not in owner.__dict__:
                 owner._fields_meta = {}
             owner._fields_meta[name] = self
 
@@ -117,10 +117,13 @@ def _install_odoo_stubs():
     odoo_exceptions.UserError = UserError
 
     # ---- odoo.tests ----
+    # TransactionCase inherits unittest.TestCase so pytest recognises test methods.
+    # Tests that call self.env will still fail — they require odoo-bin --test-enable.
+    import unittest
     odoo_tests = types.ModuleType('odoo.tests')
 
-    class TransactionCase:
-        pass
+    class TransactionCase(unittest.TestCase):
+        """Stub: provides assertion methods. self.env is NOT available without Odoo."""
 
     def tagged(*args):
         def decorator(cls):
@@ -167,15 +170,23 @@ def _install_odoo_stubs():
 
     _core = _ADDONS / 'stock_3pl_core'
 
-    # Register stub package entries for the addon namespaces
-    for pkg_name in (
-        'odoo.addons.stock_3pl_core',
-        'odoo.addons.stock_3pl_core.models',
-        'odoo.addons.stock_3pl_mainfreight',
-        'odoo.addons.stock_3pl_mainfreight.document',
+    # Register stub package entries for the addon namespaces.
+    # Set __path__ on each so Python can resolve real submodule imports from disk
+    # (e.g. odoo.addons.stock_3pl_mainfreight.document.product_spec).
+    _mf = _ADDONS / 'stock_3pl_mainfreight'
+    for pkg_name, real_path in (
+        ('odoo.addons.stock_3pl_core', _core),
+        ('odoo.addons.stock_3pl_core.models', _core / 'models'),
+        ('odoo.addons.stock_3pl_mainfreight', _mf),
+        ('odoo.addons.stock_3pl_mainfreight.document', _mf / 'document'),
+        ('odoo.addons.stock_3pl_mainfreight.models', _mf / 'models'),
+        ('odoo.addons.stock_3pl_mainfreight.transport', _mf / 'transport'),
     ):
         if pkg_name not in sys.modules:
-            sys.modules[pkg_name] = types.ModuleType(pkg_name)
+            pkg = types.ModuleType(pkg_name)
+            pkg.__path__ = [str(real_path)]
+            pkg.__package__ = pkg_name
+            sys.modules[pkg_name] = pkg
 
     # Load document_base directly so AbstractDocument is available
     _load_real_module(
