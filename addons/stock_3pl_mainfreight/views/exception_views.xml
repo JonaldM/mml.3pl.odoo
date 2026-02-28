@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Cross-border held -->
+    <record id="action_mf_cross_border_held" model="ir.actions.act_window">
+        <field name="name">Cross-Border — Awaiting Approval</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('x_mf_status', '=', 'mf_held_review')]</field>
+    </record>
+
+    <!-- All MF exceptions -->
+    <record id="action_mf_exceptions" model="ir.actions.act_window">
+        <field name="name">MF Exceptions</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('x_mf_status', '=', 'mf_exception')]</field>
+    </record>
+
+    <!-- Full MF order pipeline -->
+    <record id="action_mf_order_pipeline" model="ir.actions.act_window">
+        <field name="name">MF Order Pipeline</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('x_mf_status', '!=', False)]</field>
+    </record>
+
+</odoo>

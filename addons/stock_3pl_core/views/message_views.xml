@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         3pl.message — Tree View
+    ================================================================ -->
+    <record id="view_3pl_message_tree" model="ir.ui.view">
+        <field name="name">3pl.message.tree</field>
+        <field name="model">3pl.message</field>
+        <field name="arch" type="xml">
+            <tree string="3PL Message Queue"
+                  decoration-danger="state == 'dead'"
+                  decoration-warning="retry_count &gt; 0">
+                <field name="create_date" string="Created"/>
+                <field name="connector_id"/>
+                <field name="direction"/>
+                <field name="document_type"/>
+                <field name="action"/>
+                <field name="state"/>
+                <field name="retry_count"/>
+                <field name="warehouse_partner_ref"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         3pl.message — Form View
+    ================================================================ -->
+    <record id="view_3pl_message_form" model="ir.ui.view">
+        <field name="name">3pl.message.form</field>
+        <field name="model">3pl.message</field>
+        <field name="arch" type="xml">
+            <form string="3PL Message">
+                <header>
+                    <button name="action_requeue"
+                            string="Requeue"
+                            type="object"
+                            class="btn-warning"
+                            attrs="{'invisible': [('state', '!=', 'dead')]}"/>
+                    <field name="state"
+                           widget="statusbar"
+                           statusbar_visible="draft,queued,sending,sent,acknowledged,done,dead"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Message">
+                            <field name="connector_id"/>
+                            <field name="direction"/>
+                            <field name="document_type"/>
+                            <field name="action"/>
+                            <field name="ref_model"/>
+                            <field name="ref_id"/>
+                        </group>
+                        <group string="Tracking">
+                            <field name="retry_count"/>
+                            <field name="warehouse_partner_ref"/>
+                            <field name="report_date"/>
+                            <field name="sent_at"/>
+                            <field name="acked_at"/>
+                        </group>
+                    </group>
+
+                    <!-- Error group — only shown when there is an error -->
+                    <group string="Last Error"
+                           attrs="{'invisible': [('last_error', '=', False)]}">
+                        <field name="last_error" nolabel="1"/>
+                    </group>
+
+                    <notebook>
+                        <!-- XML Payload -->
+                        <page string="XML Payload"
+                              attrs="{'invisible': [('payload_xml', '=', False)]}">
+                            <field name="payload_xml" widget="code" nolabel="1"/>
+                        </page>
+
+                        <!-- CSV Payload -->
+                        <page string="CSV Payload"
+                              attrs="{'invisible': [('payload_csv', '=', False)]}">
+                            <field name="payload_csv" widget="code" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- ================================================================
+         3pl.message — Window Action: All Messages
+    ================================================================ -->
+    <record id="action_3pl_message_all" model="ir.actions.act_window">
+        <field name="name">3PL Message Queue</field>
+        <field name="res_model">3pl.message</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- ================================================================
+         3pl.message — Window Action: Dead Letters
+    ================================================================ -->
+    <record id="action_3pl_message_dead" model="ir.actions.act_window">
+        <field name="name">Dead Letters</field>
+        <field name="res_model">3pl.message</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('state', '=', 'dead')]</field>
+    </record>
+
+</odoo>

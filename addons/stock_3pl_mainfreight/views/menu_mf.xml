@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_mf_root"
+              name="Mainfreight"
+              parent="stock_3pl_core.menu_3pl_root"
+              sequence="50"/>
+    <menuitem id="menu_mf_pipeline"
+              name="Order Pipeline"
+              parent="menu_mf_root"
+              action="action_mf_order_pipeline"
+              sequence="10"/>
+    <menuitem id="menu_mf_cross_border"
+              name="Cross-Border Held"
+              parent="menu_mf_root"
+              action="action_mf_cross_border_held"
+              sequence="20"/>
+    <menuitem id="menu_mf_exceptions"
+              name="Exceptions"
+              parent="menu_mf_root"
+              action="action_mf_exceptions"
+              sequence="30"/>
+</odoo>

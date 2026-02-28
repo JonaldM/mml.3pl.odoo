@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_3pl_root"
+              name="3PL Integration"
+              parent="stock.menu_stock_config_settings"
+              sequence="100"/>
+
+    <menuitem id="menu_3pl_connectors"
+              name="Connectors"
+              parent="menu_3pl_root"
+              action="action_3pl_connector"
+              sequence="10"/>
+
+    <menuitem id="menu_3pl_messages"
+              name="Message Queue"
+              parent="menu_3pl_root"
+              action="action_3pl_message_all"
+              sequence="20"/>
+
+    <menuitem id="menu_3pl_dead_letters"
+              name="Dead Letters"
+              parent="menu_3pl_root"
+              action="action_3pl_message_dead"
+              sequence="30"/>
+
+</odoo>

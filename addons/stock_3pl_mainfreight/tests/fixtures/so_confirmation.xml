@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OrderConfirmation>
+  <SCH>
+    <Reference>SO001</Reference>
+    <ConsignmentNo>OTR000000134</ConsignmentNo>
+    <CarrierName>MAINFREIGHT</CarrierName>
+    <FinalisedDate>29/09/2024</FinalisedDate>
+    <ETADate>02/10/2024</ETADate>
+    <Lines>
+      <SCL>
+        <ProductCode>WIDG001</ProductCode>
+        <UnitsFulfilled>10</UnitsFulfilled>
+        <LotNumber>LOT001</LotNumber>
+      </SCL>
+    </Lines>
+  </SCH>
+</OrderConfirmation>

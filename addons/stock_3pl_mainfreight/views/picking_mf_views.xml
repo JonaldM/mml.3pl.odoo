@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Extend stock.picking FORM view -->
+    <record id="view_stock_picking_mf_form" model="ir.ui.view">
+        <field name="name">stock.picking.mf.form</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Cross-border release button in header -->
+            <xpath expr="//header" position="inside">
+                <button name="action_approve_cross_border"
+                        type="object"
+                        string="Approve Cross-Border Dispatch"
+                        class="btn-warning"
+                        attrs="{'invisible': [('x_mf_status', '!=', 'mf_held_review')]}"/>
+            </xpath>
+
+            <!-- MF status statusbar -->
+            <xpath expr="//field[@name='state']" position="after">
+                <field name="x_mf_status" widget="statusbar"
+                       statusbar_visible="mf_queued,mf_sent,mf_received,mf_dispatched,mf_delivered"
+                       attrs="{'invisible': [('x_mf_status', '=', False)]}"/>
+            </xpath>
+
+            <!-- MF details tab — only shown when this picking has MF routing -->
+            <xpath expr="//page[@name='additional_info']" position="before">
+                <page string="Mainfreight"
+                      attrs="{'invisible': [('x_mf_status', '=', False)]}">
+                    <group>
+                        <group>
+                            <field name="x_mf_status"/>
+                            <field name="x_mf_routed_by"/>
+                            <field name="x_mf_cross_border"/>
+                        </group>
+                        <group>
+                            <field name="x_mf_connote"
+                                   attrs="{'invisible': [('x_mf_connote', '=', False)]}"/>
+                            <field name="x_mf_dispatched_date"
+                                   attrs="{'invisible': [('x_mf_dispatched_date', '=', False)]}"/>
+                            <field name="x_mf_delivered_date"
+                                   attrs="{'invisible': [('x_mf_delivered_date', '=', False)]}"/>
+                            <field name="x_mf_pod_url"
+                                   attrs="{'invisible': [('x_mf_pod_url', '=', False)]}"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- Extend stock.picking TREE view -->
+    <record id="view_stock_picking_mf_tree" model="ir.ui.view">
+        <field name="name">stock.picking.mf.tree</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.vpicktree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='state']" position="after">
+                <field name="x_mf_status"
+                       optional="show"
+                       decoration-danger="x_mf_status == 'mf_exception'"
+                       decoration-warning="x_mf_status == 'mf_held_review'"
+                       decoration-success="x_mf_status == 'mf_delivered'"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
