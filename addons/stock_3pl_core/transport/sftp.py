@@ -2,6 +2,7 @@
 import io
 import logging
 import os
+import tempfile
 
 from odoo.exceptions import ValidationError
 
@@ -36,11 +37,41 @@ class SftpTransport(AbstractTransport):
     def _get_client(self):
         import paramiko
         ssh = paramiko.SSHClient()
-        # _WarnOnNewHostKeyPolicy logs a WARNING for every new/unexpected host key so
-        # that MITM attempts are visible in Odoo logs. Operators can harden further by
-        # pre-loading known_hosts or switching to paramiko.RejectPolicy() once the
-        # sftp_host_key connector field is implemented.
-        ssh.set_missing_host_key_policy(_WarnOnNewHostKeyPolicy())
+
+        if self.connector.sftp_host_key:
+            # Strict mode: pre-load the known host key and reject anything else.
+            # Write the key text to a temp file because paramiko.HostKeys.load()
+            # requires a filename, not a file-like object.
+            host_keys = paramiko.HostKeys()
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode='w',
+                    suffix='.known_hosts',
+                    delete=False,
+                    encoding='utf-8',
+                ) as f:
+                    f.write(self.connector.sftp_host_key)
+                    tmp_path = f.name
+                host_keys.load(tmp_path)
+            except Exception as e:
+                raise ValidationError(
+                    f'SFTP connector "{self.connector.name}": invalid sftp_host_key '
+                    f'format. Expected known_hosts format '
+                    f'(e.g. "hostname key-type base64-key"). Error: {e}'
+                )
+            finally:
+                if tmp_path is not None:
+                    os.unlink(tmp_path)
+            ssh._host_keys = host_keys
+            ssh._host_keys_filename = None
+            ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
+        else:
+            # Warn-only mode: log a WARNING for unknown host keys so MITM attempts
+            # are visible in Odoo logs. Set sftp_host_key on the connector to enforce
+            # strict verification.
+            ssh.set_missing_host_key_policy(_WarnOnNewHostKeyPolicy())
+
         ssh.connect(
             hostname=self.connector.sftp_host,
             port=self.connector.sftp_port or 22,

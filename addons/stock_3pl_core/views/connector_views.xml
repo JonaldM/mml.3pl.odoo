@@ -71,6 +71,11 @@
                                 <field name="sftp_outbound_path" string="Outbound Path"/>
                                 <field name="sftp_inbound_path" string="Inbound Path"/>
                             </group>
+                            <group string="Host Key Verification">
+                                <field name="sftp_host_key" widget="text"
+                                       placeholder="hostname key-type base64-key  (from ssh-keyscan)"
+                                       attrs="{'invisible': [('transport', '!=', 'sftp')]}"/>
+                            </group>
                         </page>
 
                         <!-- HTTP POST page -->

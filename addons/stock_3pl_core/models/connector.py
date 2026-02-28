@@ -43,6 +43,13 @@ class ThreePlConnector(models.Model):
     sftp_password = fields.Char('SFTP Password', password=True, groups='stock.group_stock_manager')
     sftp_inbound_path = fields.Char('SFTP Inbound Path', default='/in')
     sftp_outbound_path = fields.Char('SFTP Outbound Path', default='/out')
+    sftp_host_key = fields.Text(
+        'SFTP Host Key',
+        help='Paste the server public key in known_hosts format: '
+             '"hostname key-type base64-key" (e.g. from ssh-keyscan). '
+             'When set, strict host key verification is enforced (RejectPolicy). '
+             'Leave blank to allow new keys with a logged warning.',
+    )
 
     # HTTP POST
     http_post_url = fields.Char('HTTP POST URL')
