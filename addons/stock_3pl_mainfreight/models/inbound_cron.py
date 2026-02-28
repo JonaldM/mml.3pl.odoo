@@ -196,7 +196,7 @@ class MFInboundCron(models.AbstractModel):
 
             try:
                 handler_cls(connector=msg.connector_id, env=self.env).apply_inbound(msg)
-                msg.write({'state': 'applied'})
+                msg.action_applied()
                 processed += 1
             except Exception as exc:
                 _logger.error(
@@ -204,10 +204,7 @@ class MFInboundCron(models.AbstractModel):
                     'document_type=%s: %s',
                     msg.id, doc_type, exc,
                 )
-                msg.write({
-                    'state': 'dead',
-                    'last_error': str(exc)[:500],
-                })
+                msg._dead_letter(str(exc)[:500])
                 dead += 1
 
         _logger.info(

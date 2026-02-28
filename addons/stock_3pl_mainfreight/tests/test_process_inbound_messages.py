@@ -107,6 +107,8 @@ def _make_message(document_type, connector_name='MF Test'):
     msg.id = 1
     msg.document_type = document_type
     msg.connector_id = connector
+    msg.action_applied = MagicMock()
+    msg._dead_letter = MagicMock()
     return msg
 
 
@@ -144,7 +146,7 @@ class TestSOConfirmationDispatchedAndApplied(unittest.TestCase):
             cron._process_inbound_messages()
 
         mock_conf_doc.apply_inbound.assert_called_once_with(msg)
-        msg.write.assert_called_once_with({'state': 'applied'})
+        msg.action_applied.assert_called_once()
         MockAck.return_value.apply_inbound.assert_not_called()
         MockInv.return_value.apply_inbound.assert_not_called()
 
@@ -164,7 +166,7 @@ class TestSOAcknowledgementDispatchedAndApplied(unittest.TestCase):
             cron._process_inbound_messages()
 
         mock_ack_doc.apply_inbound.assert_called_once_with(msg)
-        msg.write.assert_called_once_with({'state': 'applied'})
+        msg.action_applied.assert_called_once()
         MockConf.return_value.apply_inbound.assert_not_called()
         MockInv.return_value.apply_inbound.assert_not_called()
 
@@ -184,7 +186,7 @@ class TestInventoryReportDispatchedAndApplied(unittest.TestCase):
             cron._process_inbound_messages()
 
         mock_inv_doc.apply_inbound.assert_called_once_with(msg)
-        msg.write.assert_called_once_with({'state': 'applied'})
+        msg.action_applied.assert_called_once()
         MockConf.return_value.apply_inbound.assert_not_called()
         MockAck.return_value.apply_inbound.assert_not_called()
 
@@ -229,26 +231,14 @@ class TestExceptionDeadLettersMessage(unittest.TestCase):
              patch(_INV_REPORT_CLS_PATH):
             cron._process_inbound_messages()
 
-        # Must be dead-lettered
-        dead_write_calls = [
-            c for c in msg.write.call_args_list
-            if c.args and c.args[0].get('state') == 'dead'
-        ]
-        self.assertEqual(len(dead_write_calls), 1,
-                         'Expected exactly one write(state=dead) call')
+        # Must be dead-lettered via _dead_letter()
+        msg._dead_letter.assert_called_once()
+        error_arg = msg._dead_letter.call_args.args[0]
+        self.assertIn('Bad XML', error_arg)
+        self.assertLessEqual(len(error_arg), 500)
 
-        dead_vals = dead_write_calls[0].args[0]
-        self.assertIn('last_error', dead_vals)
-        self.assertIn('Bad XML', dead_vals['last_error'])
-        self.assertLessEqual(len(dead_vals['last_error']), 500)
-
-        # Must NOT have been written as 'applied'
-        applied_calls = [
-            c for c in msg.write.call_args_list
-            if c.args and c.args[0].get('state') == 'applied'
-        ]
-        self.assertEqual(len(applied_calls), 0,
-                         'write(state=applied) must not be called when apply_inbound raises')
+        # Must NOT have been applied
+        msg.action_applied.assert_not_called()
 
 
 class TestOneFailureDoesNotStopOthers(unittest.TestCase):
@@ -281,19 +271,11 @@ class TestOneFailureDoesNotStopOthers(unittest.TestCase):
              patch(_INV_REPORT_CLS_PATH):
             cron._process_inbound_messages()
 
-        # msg1 must be dead-lettered
-        dead_calls_1 = [
-            c for c in msg1.write.call_args_list
-            if c.args and c.args[0].get('state') == 'dead'
-        ]
-        self.assertEqual(len(dead_calls_1), 1, 'msg1 must be dead-lettered')
+        # msg1 must be dead-lettered via _dead_letter()
+        msg1._dead_letter.assert_called_once()
 
-        # msg2 must be applied
-        applied_calls_2 = [
-            c for c in msg2.write.call_args_list
-            if c.args and c.args[0].get('state') == 'applied'
-        ]
-        self.assertEqual(len(applied_calls_2), 1, 'msg2 must be applied')
+        # msg2 must be applied via action_applied()
+        msg2.action_applied.assert_called_once()
 
 
 if __name__ == '__main__':
