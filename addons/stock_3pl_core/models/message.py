@@ -75,6 +75,19 @@ class ThreePlMessage(models.Model):
     sent_at = fields.Datetime('Sent At', readonly=True)
     acked_at = fields.Datetime('Acknowledged At', readonly=True)
 
+    _sql_constraints = [
+        (
+            'unique_idempotency_key',
+            'UNIQUE(connector_id, idempotency_key)',
+            'An outbound message with this idempotency key already exists for this connector.',
+        ),
+        (
+            'unique_source_hash',
+            'UNIQUE(connector_id, source_hash)',
+            'An inbound message with this payload hash already exists for this connector.',
+        ),
+    ]
+
     # --- Outbound state transitions ---
 
     def action_queue(self):
@@ -135,3 +148,13 @@ class ThreePlMessage(models.Model):
 
     def action_done(self):
         self.write({'state': 'done'})
+
+    # --- Idempotency helpers ---
+
+    def is_stale(self):
+        """Return True if this inbound inventory report is older than the last applied."""
+        self.ensure_one()
+        if not self.connector_id.last_soh_applied_at or not self.report_date:
+            return False
+        last = self.connector_id.last_soh_applied_at.date()
+        return self.report_date <= last
