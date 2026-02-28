@@ -41,4 +41,8 @@
         <field name="key">stock_3pl_mainfreight.kpi_ira_amber_offset</field>
         <field name="value">3</field>
     </record>
+    <record id="param_exception_escalation_user" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.exception_escalation_user</field>
+        <field name="value">0</field>
+    </record>
 </odoo>
