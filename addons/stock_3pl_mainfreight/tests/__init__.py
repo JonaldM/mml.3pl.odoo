@@ -13,6 +13,7 @@ from . import test_routing_integration
 from . import test_tracking_cron
 from . import test_inbound_cron
 from . import test_inbound_cron_dispatch
+from . import test_process_inbound_messages
 from . import test_freightways_rest
 from . import test_soh_discrepancy
 from . import test_split_engine

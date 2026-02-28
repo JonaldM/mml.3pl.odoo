@@ -29,9 +29,11 @@ class MFInboundCron(models.AbstractModel):
 
         1. Polls all active MF connectors for inbound inventory report files
            and applies them to stock.quant.
-        2. Flags stale mf_sent pickings (no connote after threshold) as mf_exception.
+        2. Processes 3pl.message records in state 'received' (XML inbound path).
+        3. Flags stale mf_sent pickings (no connote after threshold) as mf_exception.
         """
         self._poll_inventory_reports()
+        self._process_inbound_messages()
         self._reconcile_sent_orders()
 
     @api.model
@@ -134,6 +136,84 @@ class MFInboundCron(models.AbstractModel):
                 'MF inbound: connector=%s, files=%d applied, %d skipped',
                 connector.name, applied, skipped,
             )
+
+    @api.model
+    def _process_inbound_messages(self):
+        """Process 3pl.message records that arrived via the queue path (state='received').
+
+        Path A inbound messages (XML SO Confirmations, SO Acknowledgements, Inventory
+        Reports) are created by ThreePlMessage._poll_inbound() with state='received'.
+        This method dispatches each message to the correct document handler, then
+        transitions the record to 'applied' on success or 'dead' on failure.
+
+        Dispatch table:
+          so_confirmation    → SOConfirmationDocument.apply_inbound(msg)
+          so_acknowledgement → SOAcknowledgementDocument.apply_inbound(msg)
+          inventory_report   → InventoryReportDocument.apply_inbound(msg)
+          anything else      → warning logged, message skipped (not written)
+
+        Per-message exceptions do not stop processing of subsequent messages.
+        A summary INFO log is emitted at the end of the loop.
+        """
+        from odoo.addons.stock_3pl_mainfreight.document.so_confirmation import (
+            SOConfirmationDocument,
+        )
+        from odoo.addons.stock_3pl_mainfreight.document.so_acknowledgement import (
+            SOAcknowledgementDocument,
+        )
+        from odoo.addons.stock_3pl_mainfreight.document.inventory_report import (
+            InventoryReportDocument,
+        )
+
+        messages = self.env['3pl.message'].search([
+            ('direction', '=', 'inbound'),
+            ('state', '=', 'received'),
+            ('connector_id.warehouse_partner', '=', 'mainfreight'),
+        ], order='create_date asc')
+
+        _HANDLERS = {
+            'so_confirmation': SOConfirmationDocument,
+            'so_acknowledgement': SOAcknowledgementDocument,
+            'inventory_report': InventoryReportDocument,
+        }
+
+        processed = 0
+        dead = 0
+        skipped = 0
+
+        for msg in messages:
+            doc_type = msg.document_type
+            handler_cls = _HANDLERS.get(doc_type)
+
+            if handler_cls is None:
+                _logger.warning(
+                    '_process_inbound_messages: unrecognised document_type=%s '
+                    'on message id=%s — skipping',
+                    doc_type, msg.id,
+                )
+                skipped += 1
+                continue
+
+            try:
+                handler_cls(connector=msg.connector_id, env=self.env).apply_inbound(msg)
+                msg.write({'state': 'applied'})
+                processed += 1
+            except Exception as exc:
+                _logger.error(
+                    '_process_inbound_messages: failed to apply message id=%s '
+                    'document_type=%s: %s',
+                    msg.id, doc_type, exc,
+                )
+                msg.write({
+                    'state': 'dead',
+                    'last_error': str(exc)[:500],
+                })
+                dead += 1
+
+        _logger.info(
+            'MF inbound: processed=%d dead=%d skipped=%d',
+            processed, dead, skipped,
+        )
 
     @api.model
     def _reconcile_sent_orders(self):
