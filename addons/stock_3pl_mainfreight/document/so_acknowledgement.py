@@ -54,26 +54,35 @@ class SOAcknowledgementDocument(AbstractDocument):
 
     def _apply_rows(self, rows):
         """Apply a list of parsed ACK dicts to Odoo."""
+        applied = 0
+        skipped = 0
         for ack in rows:
             order_ref = ack.get('client_order_number')
             if not order_ref:
+                skipped += 1
                 continue
             try:
                 order_ref = _validate_ref(order_ref, 'client order number')
             except ValidationError as exc:
                 _logger.warning('MF ACK: skipping row — %s', exc)
+                skipped += 1
                 continue
             order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
             if not order:
                 _logger.warning('MF ACK: sale order not found for reference %s', order_ref)
+                skipped += 1
                 continue
             picking = order.picking_ids.filtered(
                 lambda p: p.state not in ('done', 'cancel')
             )[:1]
             if picking and hasattr(picking, 'x_mf_status'):
                 picking.x_mf_status = 'mf_received'
-            _logger.info('MF ACK: order %s acknowledged by MF (status: %s)',
-                         order_ref, ack.get('order_status'))
+                _logger.info('MF ACK: order %s acknowledged by MF (status: %s)',
+                             order_ref, ack.get('order_status'))
+                applied += 1
+            else:
+                skipped += 1
+        _logger.info('MF ACK: applied=%d skipped=%d', applied, skipped)
 
     def apply_inbound(self, message):
         """Apply SO Acknowledgements to Odoo: set picking status to mf_received."""

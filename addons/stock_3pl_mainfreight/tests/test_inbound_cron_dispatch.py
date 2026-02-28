@@ -256,5 +256,31 @@ class TestDispatchRESTSOHStringToInventoryReport(unittest.TestCase):
         mock_ack_doc.apply_csv.assert_not_called()
 
 
+class TestDispatchRESTACKStringToAcknowledgement(unittest.TestCase):
+    """REST poll returns raw string with ACKH CSV header → SOAcknowledgementDocument.apply_csv."""
+
+    def test_rest_ack_raw_string_dispatched_to_acknowledgement(self):
+        """REST poll item is a raw CSV string (no filename tuple) with a ClientOrderNumber header.
+        Filename falls back to '<rest>' which does not start with ACKH_/ACKL_.
+        _detect_inbound_type returns 'so_acknowledgement'.
+        SOAcknowledgementDocument.apply_csv is called; InventoryReportDocument is NOT."""
+        # REST returns a plain string, not a (filename, content) tuple
+        cron = _make_cron([_ACK_CSV])
+
+        mock_inv_doc = MagicMock()
+        mock_ack_doc = MagicMock()
+
+        with patch(_INV_REPORT_CLS_PATH, return_value=mock_inv_doc), \
+             patch(_SO_ACK_CLS_PATH, return_value=mock_ack_doc), \
+             patch(_DETECT_TYPE_PATH, return_value='so_acknowledgement'):
+            cron._poll_inventory_reports()
+
+        mock_ack_doc.apply_csv.assert_called_once()
+        args = mock_ack_doc.apply_csv.call_args[0]
+        self.assertEqual(args[0], _ACK_CSV)
+
+        mock_inv_doc.apply_csv.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
