@@ -1,3 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="cron_process_outbound_queue" model="ir.cron">
+        <field name="name">3PL: Process Outbound Queue</field>
+        <field name="model_id" ref="model_3pl_message"/>
+        <field name="state">code</field>
+        <field name="code">model._process_outbound_queue()</field>
+        <field name="interval_number">5</field>
+        <field name="interval_type">minutes</field>
+        <field name="numbercall">-1</field>
+        <field name="active">True</field>
+    </record>
+
+    <record id="cron_poll_inbound" model="ir.cron">
+        <field name="name">3PL: Poll Inbound Messages</field>
+        <field name="model_id" ref="model_3pl_message"/>
+        <field name="state">code</field>
+        <field name="code">model._poll_inbound()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
+        <field name="numbercall">-1</field>
+        <field name="active">True</field>
+    </record>
 </odoo>

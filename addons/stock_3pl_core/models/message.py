@@ -164,3 +164,48 @@ class ThreePlMessage(models.Model):
             return False
         last = self.connector_id.last_soh_applied_at.date()
         return self.report_date <= last
+
+    # ---- Cron-driven queue processor ----
+
+    @api.model
+    def _process_outbound_queue(self):
+        """Called by cron. Processes all queued outbound messages.
+
+        For each queued message:
+        - Marks it as sending
+        - Calls the connector's transport adapter
+        - On success: marks sent
+        - On validation failure (422): dead-letters immediately (no retry)
+        - On retriable failure (5xx, network): increments retry_count or dead-letters at MAX_RETRIES
+        """
+        queued = self.search([
+            ('state', '=', 'queued'),
+            ('direction', '=', 'outbound'),
+        ])
+        for msg in queued:
+            try:
+                msg.action_sending()
+                transport = msg.connector_id.get_transport()
+                payload = msg.payload_xml or msg.payload_json or msg.payload_csv
+                result = transport.send(
+                    payload,
+                    content_type=msg._detect_content_type(),
+                )
+                if result['success']:
+                    msg.action_sent()
+                elif result.get('error_type') == 'validation':
+                    msg.action_validation_fail(result.get('error', 'Validation error'))
+                else:
+                    msg.action_fail(result.get('error', 'Unknown error'))
+            except Exception as e:
+                _logger.error('Error processing 3PL message %s: %s', msg.id, e)
+                msg.action_fail(str(e))
+
+    def _detect_content_type(self):
+        """Detect payload type from which payload field is populated."""
+        self.ensure_one()
+        if self.payload_xml:
+            return 'xml'
+        if self.payload_json:
+            return 'json'
+        return 'csv'
