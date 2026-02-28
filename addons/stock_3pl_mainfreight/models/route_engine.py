@@ -41,6 +41,10 @@ class MFRouteEngine(models.AbstractModel):
                 'Enable at least one warehouse under Inventory \u2192 Warehouses.'
             )
 
+        lines = self._order_lines(order)
+        if not lines:
+            return []
+
         partner = order.partner_shipping_id or order.partner_id
         cust_lat = partner.partner_latitude
         cust_lng = partner.partner_longitude
@@ -51,7 +55,7 @@ class MFRouteEngine(models.AbstractModel):
                 'assigning to first MF warehouse: %s',
                 partner.name, order.name, warehouses[0].name,
             )
-            return [{'warehouse': warehouses[0], 'lines': self._order_lines(order)}]
+            return [{'warehouse': warehouses[0], 'lines': lines}]
 
         # Sort warehouses by distance to customer
         # Filter out warehouses without coordinates before calling haversine
@@ -66,11 +70,9 @@ class MFRouteEngine(models.AbstractModel):
                 '— assigning to first MF warehouse: %s',
                 order.name, warehouses[0].name,
             )
-            return [{'warehouse': warehouses[0], 'lines': self._order_lines(order)}]
+            return [{'warehouse': warehouses[0], 'lines': lines}]
 
         sorted_wh = sort_warehouses_by_distance(cust_lat, cust_lng, wh_data)
-
-        lines = self._order_lines(order)
         is_single_line = len(lines) == 1
 
         if is_single_line:

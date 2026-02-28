@@ -115,6 +115,25 @@ def _make_order(lines, shipping_partner=None):
     return order
 
 
+def _make_routable_engine(wh_list, stock_map):
+    """Construct an MFRouteEngine with mocked warehouses and stock.
+
+    stock_map: {product: {warehouse_name: qty}}
+    """
+    engine = object.__new__(MFRouteEngine)
+    engine.env = MagicMock()
+    engine._get_mf_warehouses = lambda: wh_list
+
+    def check_stock(wh, lines):
+        result = {}
+        for prod, _qty in lines:
+            result[prod] = stock_map.get(prod, {}).get(wh.name, 0.0)
+        return result
+
+    engine._check_stock = check_stock
+    return engine
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -351,21 +370,6 @@ class TestCheckStock(unittest.TestCase):
 class TestRouteOrderSingleLine(unittest.TestCase):
     """Single-line orders prefer complete fulfilment from one warehouse."""
 
-    def _make_routable_engine(self, wh_list, stock_map):
-        """stock_map: {product: {warehouse_name: qty}}"""
-        engine = object.__new__(MFRouteEngine)
-        engine.env = MagicMock()
-        engine._get_mf_warehouses = lambda: wh_list
-
-        def check_stock(wh, lines):
-            result = {}
-            for prod, _qty in lines:
-                result[prod] = stock_map.get(prod, {}).get(wh.name, 0.0)
-            return result
-
-        engine._check_stock = check_stock
-        return engine
-
     def test_assigns_to_closest_warehouse_with_full_stock(self):
         """WH-SYD is closer to Brisbane but has 0 stock; WH-MEL has enough."""
         wh_syd = _make_warehouse('WH-SYD', lat=-33.87, lng=151.21)
@@ -375,7 +379,7 @@ class TestRouteOrderSingleLine(unittest.TestCase):
         # Customer in Brisbane (~lat -27.47, lng 153.03) — closer to SYD than MEL
         stock_map = {prod: {'WH-SYD': 0.0, 'WH-MEL': 10.0}}
 
-        engine = self._make_routable_engine([wh_syd, wh_mel], stock_map)
+        engine = _make_routable_engine([wh_syd, wh_mel], stock_map)
 
         partner = MagicMock()
         partner.partner_latitude = -27.47
@@ -401,7 +405,7 @@ class TestRouteOrderSingleLine(unittest.TestCase):
         # Neither warehouse can fill qty=10 alone
         stock_map = {prod: {'WH-A': 4.0, 'WH-B': 7.0}}
 
-        engine = self._make_routable_engine([wh1, wh2], stock_map)
+        engine = _make_routable_engine([wh1, wh2], stock_map)
 
         partner = MagicMock()
         partner.partner_latitude = -34.0
@@ -425,21 +429,6 @@ class TestRouteOrderSingleLine(unittest.TestCase):
 class TestRouteOrderMultiLine(unittest.TestCase):
     """Multi-product orders use greedy partial assignment across warehouses."""
 
-    def _make_routable_engine(self, wh_list, stock_map):
-        """stock_map: {product: {warehouse_name: qty}}"""
-        engine = object.__new__(MFRouteEngine)
-        engine.env = MagicMock()
-        engine._get_mf_warehouses = lambda: wh_list
-
-        def check_stock(wh, lines):
-            result = {}
-            for prod, _qty in lines:
-                result[prod] = stock_map.get(prod, {}).get(wh.name, 0.0)
-            return result
-
-        engine._check_stock = check_stock
-        return engine
-
     def test_two_products_split_across_two_warehouses(self):
         """WH-A has prod1 only; WH-B has prod2 only — each assigned to the right warehouse."""
         wh1 = _make_warehouse('WH-A', lat=-33.0, lng=151.0)
@@ -454,7 +443,7 @@ class TestRouteOrderMultiLine(unittest.TestCase):
             prod2: {'WH-A': 0.0, 'WH-B': 8.0},
         }
 
-        engine = self._make_routable_engine([wh1, wh2], stock_map)
+        engine = _make_routable_engine([wh1, wh2], stock_map)
 
         partner = MagicMock()
         partner.partner_latitude = -34.0   # closer to WH-A
@@ -494,7 +483,7 @@ class TestRouteOrderMultiLine(unittest.TestCase):
             prod2: {'WH-X': 0.0},
         }
 
-        engine = self._make_routable_engine([wh1], stock_map)
+        engine = _make_routable_engine([wh1], stock_map)
 
         partner = MagicMock()
         partner.partner_latitude = -34.0
@@ -518,6 +507,52 @@ class TestRouteOrderMultiLine(unittest.TestCase):
         assigned_products = [p for p, _q in result[0]['lines']]
         self.assertIn(prod1, assigned_products)
         self.assertNotIn(prod2, assigned_products)
+
+
+class TestRouteOrderEmptyLines(unittest.TestCase):
+    """route_order returns [] when the order has no storable product lines."""
+
+    def test_no_storable_lines_no_lat_lng_returns_empty(self):
+        """Order with only service lines + partner has no lat/lng → []."""
+        wh = _make_warehouse('WH-EMPTY', lat=-37.0, lng=175.0)
+        engine = object.__new__(MFRouteEngine)
+        engine.env = MagicMock()
+        engine._get_mf_warehouses = lambda: [wh]
+        engine._order_lines = lambda o: []   # no storable lines
+
+        partner = MagicMock()
+        partner.partner_latitude = 0.0
+        partner.partner_longitude = 0.0
+        partner.name = 'Service-only Customer'
+
+        order = MagicMock()
+        order.name = 'SO-SVCONLY'
+        order.partner_shipping_id = partner
+        order.order_line = []
+
+        result = engine.route_order(order)
+        self.assertEqual(result, [])
+
+    def test_no_storable_lines_with_coords_returns_empty(self):
+        """Order with only service lines + partner has valid coords → []."""
+        wh = _make_warehouse('WH-COORDS', lat=-37.0, lng=175.0)
+        engine = object.__new__(MFRouteEngine)
+        engine.env = MagicMock()
+        engine._get_mf_warehouses = lambda: [wh]
+        engine._order_lines = lambda o: []   # no storable lines
+
+        partner = MagicMock()
+        partner.partner_latitude = -36.8
+        partner.partner_longitude = 174.7
+        partner.name = 'Auckland Service Customer'
+
+        order = MagicMock()
+        order.name = 'SO-SVCCOORDS'
+        order.partner_shipping_id = partner
+        order.order_line = []
+
+        result = engine.route_order(order)
+        self.assertEqual(result, [])
 
 
 if __name__ == '__main__':
