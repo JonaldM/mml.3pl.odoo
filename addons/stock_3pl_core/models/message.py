@@ -288,4 +288,12 @@ class ThreePlMessage(models.Model):
             return 'inward_confirmation'
         if stripped.startswith('<'):
             return None  # Unrecognised XML — do not store as inventory_report
-        return 'inventory_report'  # Non-XML content — assume SOH CSV
+        # Non-XML content — peek at the first non-empty line to distinguish
+        # ACKH/ACKL (SO Acknowledgement) CSV from SOH (Inventory Report) CSV.
+        first_line = next(
+            (line for line in stripped.splitlines() if line.strip()),
+            '',
+        )
+        if 'clientordernumber' in first_line.lower():
+            return 'so_acknowledgement'
+        return 'inventory_report'  # Default: SOH CSV
