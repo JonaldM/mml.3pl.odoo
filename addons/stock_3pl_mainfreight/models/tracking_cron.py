@@ -92,7 +92,7 @@ class MFTrackingCron(models.AbstractModel):
             write_vals['x_mf_signed_by'] = signed_by
 
         delivered_at = result.get('delivered_at')
-        if delivered_at is not None:
+        if delivered_at:
             write_vals['x_mf_delivered_date'] = delivered_at
 
         if write_vals:
