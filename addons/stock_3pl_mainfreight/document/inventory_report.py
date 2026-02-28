@@ -2,6 +2,7 @@ import csv
 import io
 import logging
 from datetime import datetime
+from odoo import fields
 from odoo.exceptions import ValidationError
 from odoo.addons.stock_3pl_core.models.document_base import AbstractDocument
 
@@ -15,10 +16,6 @@ def _validate_ref(value, field_name, max_len=256):
     if len(value) > max_len:
         raise ValidationError(f'Invalid {field_name}: value too long ({len(value)} chars, max {max_len})')
     return value.strip()
-
-# Discrepancy threshold: differences within this range are auto-corrected.
-# Larger discrepancies are flagged for manual review (future enhancement).
-DISCREPANCY_AUTO_CORRECT_THRESHOLD = 5
 
 
 class InventoryReportDocument(AbstractDocument):
@@ -94,6 +91,8 @@ class InventoryReportDocument(AbstractDocument):
 
             # Write discrepancy record if drift exceeds tolerance
             variance = abs(mf_qty - odoo_qty)
+            # threshold = 0 when odoo_qty == 0 (new product at MF not yet in Odoo)
+            # so any nonzero variance triggers a discrepancy record — this is intentional.
             threshold = odoo_qty * tolerance
             if variance > threshold:
                 self._write_discrepancy(product, mf_qty, odoo_qty)
@@ -103,7 +102,7 @@ class InventoryReportDocument(AbstractDocument):
         if report_date:
             # Record when this report was applied (not the report's date).
             # last_soh_applied_at is used by is_stale() to reject older reports.
-            self.connector.last_soh_applied_at = datetime.now()
+            self.connector.last_soh_applied_at = fields.Datetime.now()
 
     def apply_inbound(self, message):
         """Apply inbound inventory report from a 3pl.message record."""
@@ -140,18 +139,23 @@ class InventoryReportDocument(AbstractDocument):
             ('warehouse_id', '=', warehouse.id),
             ('state', '=', 'open'),
         ], limit=1)
-        vals = {
+        create_vals = {
             'product_id': product.id,
             'warehouse_id': warehouse.id,
             'mf_qty': mf_qty,
             'odoo_qty': odoo_qty,
-            'detected_date': datetime.now(),
+            'detected_date': fields.Datetime.now(),
             'state': 'open',
         }
         if existing:
-            existing.write(vals)
+            existing.write({
+                'mf_qty': mf_qty,
+                'odoo_qty': odoo_qty,
+                'detected_date': fields.Datetime.now(),
+                'state': 'open',
+            })
         else:
-            self.env['mf.soh.discrepancy'].create(vals)
+            self.env['mf.soh.discrepancy'].create(create_vals)
 
     @staticmethod
     def _parse_date(date_str):

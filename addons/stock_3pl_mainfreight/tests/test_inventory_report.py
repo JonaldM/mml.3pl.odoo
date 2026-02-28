@@ -72,7 +72,7 @@ class TestInventoryReportDiscrepancy(unittest.TestCase):
         from odoo.addons.stock_3pl_mainfreight.document.inventory_report import InventoryReportDocument
         return InventoryReportDocument
 
-    def _make_env_with_quant(self, odoo_qty, mf_qty):
+    def _make_env_with_quant(self, odoo_qty, mf_qty=0.0):
         """Build a minimal mock env that satisfies all ORM calls in apply_csv().
 
         Returns a tuple of (env, discrepancy_model) so tests can assert on the
@@ -150,6 +150,7 @@ class TestInventoryReportDiscrepancy(unittest.TestCase):
         call_vals = discrepancy_model.create.call_args[0][0]
         self.assertEqual(call_vals['mf_qty'], 95.0)
         self.assertEqual(call_vals['odoo_qty'], 100.0)
+        self.assertEqual(call_vals.get('state'), 'open')
 
     def test_apply_csv_no_discrepancy_within_tolerance(self):
         """apply_csv() does NOT create discrepancy when drift is within 0.5% tolerance.
@@ -179,3 +180,19 @@ class TestInventoryReportDiscrepancy(unittest.TestCase):
         doc.apply_csv(csv_content)
         existing.write.assert_called_once()
         discrepancy_model.create.assert_not_called()
+
+    def test_apply_csv_zero_odoo_qty_triggers_discrepancy(self):
+        """Zero odoo_qty + nonzero MF qty must always trigger a discrepancy (threshold=0)."""
+        env, discrepancy_model = self._make_env_with_quant(odoo_qty=0.0)
+        # Override quant search to return falsy (no existing quant record)
+        env['stock.quant'].search = MagicMock(return_value=MagicMock(
+            __bool__=MagicMock(return_value=False),
+            quantity=0.0,
+        ))
+        doc = self._get_doc_class()(connector=self._make_connector(env), env=env)
+        csv_content = self._make_soh_csv('SKU001', 50)
+        doc.apply_csv(csv_content)
+        discrepancy_model.create.assert_called_once()
+        call_vals = discrepancy_model.create.call_args[0][0]
+        self.assertEqual(call_vals['mf_qty'], 50.0)
+        self.assertEqual(call_vals['odoo_qty'], 0.0)
