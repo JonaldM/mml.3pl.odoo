@@ -91,8 +91,9 @@ class TestConnector(TransactionCase):
         ], order='priority asc', limit=1)
         self.assertEqual(result.id, low.id)
 
-    def test_category_catch_all_empty(self):
-        """Connector with no categories configured is a catch-all."""
+    def test_category_ids_default_empty(self):
+        """product_category_ids defaults to empty (no linked records) on a new connector.
+        An empty Many2many means the connector acts as a catch-all for any product category."""
         connector = self.env['3pl.connector'].create({
             'name': 'Catch-all Connector',
             'warehouse_id': self.warehouse.id,
