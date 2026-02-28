@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_mf_pipeline_kanban" model="ir.ui.view">
+        <field name="name">stock.picking.mf_pipeline.kanban</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="x_mf_status"
+                    group_delete="false"
+                    group_create="false"
+                    group_edit="false"
+                    quick_create="false">
+                <field name="x_mf_status"/>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="picking_type_id"/>
+                <field name="x_mf_connote"/>
+                <field name="write_date"/>
+                <field name="move_ids"/>
+
+                <progressbar field="x_mf_status"
+                             colors='{"mf_exception": "danger"}'/>
+
+                <templates>
+                    <t t-name="kanban-box">
+                        <div t-attf-class="oe_kanban_card oe_kanban_global_click
+                            #{record.x_mf_status.raw_value === 'mf_exception' ? 'border-danger' : ''}">
+                            <div class="oe_kanban_content">
+                                <div class="o_kanban_record_title">
+                                    <strong><field name="name"/></strong>
+                                </div>
+                                <div class="o_kanban_record_subtitle">
+                                    <field name="partner_id"/>
+                                </div>
+                                <div class="o_kanban_record_body">
+                                    <span class="text-muted">
+                                        <field name="picking_type_id" widget="many2one_tags"/>
+                                    </span>
+                                </div>
+                                <div class="o_kanban_record_bottom">
+                                    <div class="oe_kanban_bottom_left text-muted small">
+                                        <i class="fa fa-clock-o"/> <field name="write_date" widget="date"/>
+                                    </div>
+                                    <div class="oe_kanban_bottom_right">
+                                        <t t-if="record.x_mf_status.raw_value === 'mf_exception'">
+                                            <button name="action_mf_retry"
+                                                    type="object"
+                                                    class="btn btn-sm btn-danger">
+                                                Retry
+                                            </button>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+</odoo>
