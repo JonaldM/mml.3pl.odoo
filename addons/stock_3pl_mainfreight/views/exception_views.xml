@@ -1,7 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- Cross-border held -->
+    <!-- ── Reassign Warehouse Wizard form ───────────────────────────── -->
+    <record id="view_mf_reassign_wizard_form" model="ir.ui.view">
+        <field name="name">mf.reassign.warehouse.wizard.form</field>
+        <field name="model">mf.reassign.warehouse.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Reassign to Warehouse">
+                <group>
+                    <field name="picking_id" readonly="1"/>
+                    <field name="connector_id"/>
+                    <field name="reason" placeholder="Reason for reassignment (optional)"/>
+                </group>
+                <footer>
+                    <button name="action_reassign" type="object" string="Reassign"
+                            class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mf_reassign_wizard" model="ir.actions.act_window">
+        <field name="name">Reassign Warehouse</field>
+        <field name="res_model">mf.reassign.warehouse.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{'default_picking_id': active_id}</field>
+    </record>
+
+    <!-- ── Exception queue tree ─────────────────────────────────────── -->
+    <record id="view_mf_exception_tree" model="ir.ui.view">
+        <field name="name">stock.picking.mf_exception.tree</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <tree string="MF Exceptions" decoration-danger="True" default_order="write_date desc">
+                <field name="name" string="Reference"/>
+                <field name="partner_id" string="Partner"/>
+                <field name="picking_type_id" string="Operation"/>
+                <field name="x_mf_connote" string="Connote"/>
+                <field name="x_mf_assigned_to" string="Assigned To" optional="show"/>
+                <field name="write_date" string="Exception Date"/>
+                <field name="x_mf_status" invisible="1"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- ── Exception form — inherits stock picking form, adds buttons ── -->
+    <record id="view_mf_exception_form" model="ir.ui.view">
+        <field name="name">stock.picking.mf_exception.form</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_mf_retry"
+                        string="Retry"
+                        type="object"
+                        class="btn-primary"
+                        attrs="{'invisible': [('x_mf_status', '!=', 'mf_exception')]}"/>
+                <button name="%(action_mf_reassign_wizard)d"
+                        string="Reassign Warehouse"
+                        type="action"
+                        attrs="{'invisible': [('x_mf_status', 'not in', ['mf_exception', 'mf_held_review'])]}"/>
+                <button name="action_mf_mark_resolved"
+                        string="Mark Resolved"
+                        type="object"
+                        attrs="{'invisible': [('x_mf_status', '!=', 'mf_exception')]}"/>
+                <button name="action_mf_escalate"
+                        string="Escalate"
+                        type="object"
+                        class="btn-warning"
+                        attrs="{'invisible': [('x_mf_status', 'not in', ['mf_exception', 'mf_held_review'])]}"/>
+            </xpath>
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="x_mf_status" readonly="1"
+                       attrs="{'invisible': [('x_mf_status', '=', False)]}"/>
+                <field name="x_mf_assigned_to"
+                       attrs="{'invisible': [('x_mf_status', 'not in', ['mf_exception', 'mf_resolved'])]}"/>
+                <field name="x_mf_connote" readonly="1"
+                       attrs="{'invisible': [('x_mf_connote', '=', False)]}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ── Actions ──────────────────────────────────────────────────── -->
     <record id="action_mf_cross_border_held" model="ir.actions.act_window">
         <field name="name">Cross-Border — Awaiting Approval</field>
         <field name="res_model">stock.picking</field>
@@ -9,20 +91,19 @@
         <field name="domain">[('x_mf_status', '=', 'mf_held_review')]</field>
     </record>
 
-    <!-- All MF exceptions -->
     <record id="action_mf_exceptions" model="ir.actions.act_window">
-        <field name="name">MF Exceptions</field>
+        <field name="name">Exception Queue</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">tree,form</field>
+        <field name="view_id" ref="view_mf_exception_tree"/>
         <field name="domain">[('x_mf_status', '=', 'mf_exception')]</field>
     </record>
 
-    <!-- Full MF order pipeline -->
     <record id="action_mf_order_pipeline" model="ir.actions.act_window">
-        <field name="name">MF Order Pipeline</field>
+        <field name="name">Order Pipeline</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">tree,form</field>
-        <field name="domain">[('x_mf_status', '!=', False)]</field>
+        <field name="view_mode">kanban,tree,form</field>
+        <field name="domain">[('x_mf_status', 'not in', [False, 'draft'])]</field>
     </record>
 
 </odoo>
