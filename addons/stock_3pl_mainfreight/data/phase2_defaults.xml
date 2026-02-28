@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- KPI targets — noupdate=1 so user edits are preserved on upgrade -->
+    <record id="param_kpi_difot_target" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kpi_difot_target</field>
+        <field name="value">95</field>
+    </record>
+    <record id="param_kpi_ira_target" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kpi_ira_target</field>
+        <field name="value">98</field>
+    </record>
+    <record id="param_kpi_exception_rate_target" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kpi_exception_rate_target</field>
+        <field name="value">2</field>
+    </record>
+    <record id="param_difot_grace_days" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.difot_grace_days</field>
+        <field name="value">0</field>
+    </record>
+    <record id="param_ira_tolerance" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.ira_tolerance</field>
+        <field name="value">0.005</field>
+    </record>
+    <record id="param_kanban_delivered_fold_days" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kanban_delivered_fold_days</field>
+        <field name="value">7</field>
+    </record>
+    <record id="param_discrepancy_archive_days" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.discrepancy_archive_days</field>
+        <field name="value">90</field>
+    </record>
+    <record id="param_kpi_shrinkage_target" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kpi_shrinkage_target</field>
+        <field name="value">0.5</field>
+    </record>
+    <record id="param_kpi_difot_amber_offset" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kpi_difot_amber_offset</field>
+        <field name="value">5</field>
+    </record>
+    <record id="param_kpi_ira_amber_offset" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kpi_ira_amber_offset</field>
+        <field name="value">3</field>
+    </record>
+</odoo>
