@@ -2,9 +2,11 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build the Phase 2 "3PL Operations" UX layer — kanban pipeline, exception queue with case management, configurable KPI dashboard (DIFOT 95%, IRA 98%), and inventory discrepancy screen.
+**Goal:** Build the Phase 2 "3PL Operations" UX layer — kanban pipeline, exception queue with case management, configurable KPI dashboard (DIFOT 95%, IRA 98%, Shrinkage 0.5%/year), and inventory discrepancy screen with accept-and-log workflow.
 
-**Architecture:** Native Odoo 15 views (kanban/tree/form) for pipeline and queues. OWL 2 client action for the KPI dashboard stat cards and today-summary strip, using Odoo's native graph views for trends. New `mf.soh.discrepancy` transient model captures SOH drift from the inbound cron. All KPI targets stored in `ir.config_parameter`.
+**Architecture:** Native Odoo 15 views (kanban/tree/form) for pipeline and queues. OWL 2 client action for the KPI dashboard stat cards and today-summary strip, using Odoo's native graph views for trends. New `mf.soh.discrepancy` model captures SOH drift from the inbound cron. All KPI targets stored in `ir.config_parameter`.
+
+**Amendment (post-design):** Discrepancy screen changed from view-only to accept-with-reason. "Accept" writes MF qty to Odoo quant (MF is the source of truth), logs who/when/reason, and accumulates as the Shrinkage KPI. Shrinkage % = sum of accepted variance units in rolling year / total inventory units × 100. Target 0.5%/year, configurable.
 
 **Tech Stack:** Odoo 15, Python 3.9+, OWL 2 (`@odoo/owl`), Odoo JS registry pattern, `ir.actions.client`, `mail.thread` on `stock.picking` (already present), `ir.config_parameter` for targets.
 
@@ -111,10 +113,16 @@ class MfSohDiscrepancy(models.Model):
     variance_pct = fields.Float('Variance %', digits=(10, 4),
                                 compute='_compute_variance', store=True)
     detected_date = fields.Datetime('Detected', default=fields.Datetime.now, index=True)
-    state = fields.Selection([('open', 'Open'), ('investigated', 'Investigated')],
-                              default='open', index=True)
+    state = fields.Selection([
+        ('open', 'Open'),
+        ('investigated', 'Investigated'),
+        ('accepted', 'Accepted — Shrinkage'),
+    ], default='open', index=True)
     investigated_by = fields.Many2one('res.users', 'Investigated By', readonly=True)
     investigated_date = fields.Datetime('Investigated Date', readonly=True)
+    accepted_by = fields.Many2one('res.users', 'Accepted By', readonly=True)
+    accepted_date = fields.Datetime('Accepted Date', readonly=True)
+    accept_reason = fields.Text('Acceptance Reason', readonly=True)
     active = fields.Boolean(default=True)
 
     @api.depends('odoo_qty', 'mf_qty')
@@ -128,6 +136,37 @@ class MfSohDiscrepancy(models.Model):
             'state': 'investigated',
             'investigated_by': self.env.user.id,
             'investigated_date': fields.Datetime.now(),
+        })
+
+    def action_accept_discrepancy(self, reason=''):
+        """Accept the discrepancy as shrinkage and update Odoo quant to MF figure.
+
+        - Writes MF qty to stock.quant (MF is source of truth).
+        - Logs acceptance with user, date, reason.
+        - Sets state = 'accepted' so shrinkage KPI can accumulate it.
+        """
+        self.ensure_one()
+        if self.state == 'accepted':
+            raise UserError(f'{self.product_id.display_name} discrepancy already accepted.')
+        # Update Odoo quant to match MF
+        stock_location = self.warehouse_id.lot_stock_id
+        quant = self.env['stock.quant'].search([
+            ('product_id', '=', self.product_id.id),
+            ('location_id', '=', stock_location.id),
+        ], limit=1)
+        if quant:
+            quant.sudo().write({'quantity': self.mf_qty})
+        else:
+            self.env['stock.quant'].sudo().create({
+                'product_id': self.product_id.id,
+                'location_id': stock_location.id,
+                'quantity': self.mf_qty,
+            })
+        self.write({
+            'state': 'accepted',
+            'accepted_by': self.env.user.id,
+            'accepted_date': fields.Datetime.now(),
+            'accept_reason': reason or 'Accepted as shrinkage.',
         })
 ```
 
@@ -564,6 +603,9 @@ class MfKpiDashboard(models.AbstractModel):
             'exception_rate_target': float(ICP.get_param(
                 'stock_3pl_mainfreight.kpi_exception_rate_target', '2'
             )),
+            'shrinkage_target': float(ICP.get_param(
+                'stock_3pl_mainfreight.kpi_shrinkage_target', '0.5'
+            )),
             'difot_grace_days': int(ICP.get_param(
                 'stock_3pl_mainfreight.difot_grace_days', '0'
             )),
@@ -589,7 +631,9 @@ class MfKpiDashboard(models.AbstractModel):
         ira_val = self._compute_ira_value(thirty_days_ago, targets['ira_tolerance'])
         exception_rate_val, in_flight = self._compute_exception_and_inflight(thirty_days_ago)
 
+        shrinkage_val = self._compute_shrinkage_value()
         t = targets['exception_rate_target']
+        st = targets['shrinkage_target']
         return {
             'difot': {
                 'value': difot_val,
@@ -604,6 +648,10 @@ class MfKpiDashboard(models.AbstractModel):
             'exception_rate': {
                 'value': exception_rate_val,
                 'rag': _rag_status_lower_is_better(exception_rate_val, t, t * 2.5),
+            },
+            'shrinkage': {
+                'value': shrinkage_val,
+                'rag': _rag_status_lower_is_better(shrinkage_val, st, st * 2),
             },
             'in_flight': {'value': in_flight, 'rag': 'none'},
             'today': self._compute_today_summary(now),
@@ -696,6 +744,26 @@ class MfKpiDashboard(models.AbstractModel):
             ('x_mf_status', 'in', ['mf_sent', 'mf_received', 'mf_dispatched']),
         ])
         return _compute_exception_rate(total, exceptions), in_flight
+
+    def _compute_shrinkage_value(self) -> float:
+        """Shrinkage % = accepted variance units (rolling year) / total inventory units × 100.
+
+        Only counts 'accepted' discrepancies where variance_qty < 0 (i.e. MF < Odoo = stock lost).
+        """
+        one_year_ago = fields.Datetime.now() - timedelta(days=365)
+        accepted = self.env['mf.soh.discrepancy'].search([
+            ('state', '=', 'accepted'),
+            ('accepted_date', '>=', one_year_ago),
+            ('variance_qty', '<', 0),  # loss: MF qty < Odoo qty
+        ])
+        total_lost = sum(abs(r.variance_qty) for r in accepted)
+        # Total inventory = sum of all internal stock quant quantities
+        quants = self.env['stock.quant'].search([
+            ('location_id.usage', '=', 'internal'),
+            ('quantity', '>', 0),
+        ])
+        total_stock = sum(q.quantity for q in quants) or 1.0
+        return round(total_lost / total_stock * 100, 3)
 
     def _compute_today_summary(self, now: object) -> dict:
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1119,6 +1187,40 @@ git commit -m "feat(phase2): add MF order pipeline kanban view"
         </field>
     </record>
 
+    <!-- Accept discrepancy wizard -->
+    <record id="view_mf_accept_discrepancy_wizard_form" model="ir.ui.view">
+        <field name="name">mf.accept.discrepancy.wizard.form</field>
+        <field name="model">mf.accept.discrepancy.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Accept as Shrinkage">
+                <group>
+                    <field name="discrepancy_id" readonly="1"/>
+                    <field name="variance_qty" readonly="1" string="Units to Accept"/>
+                    <field name="variance_pct" readonly="1" string="Variance %"/>
+                    <field name="reason" required="1"
+                           placeholder="e.g. Stock count confirmed, accepted as shrinkage"/>
+                </group>
+                <div class="alert alert-warning" role="alert">
+                    This will update the Odoo stock quantity to match MF.
+                    The accepted variance will be recorded against the Shrinkage KPI.
+                </div>
+                <footer>
+                    <button name="action_accept" type="object"
+                            string="Accept as Shrinkage" class="btn-warning"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mf_accept_discrepancy_wizard" model="ir.actions.act_window">
+        <field name="name">Accept as Shrinkage</field>
+        <field name="res_model">mf.accept.discrepancy.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{'default_discrepancy_id': active_id}</field>
+    </record>
+
     <record id="view_mf_discrepancy_form" model="ir.ui.view">
         <field name="name">mf.soh.discrepancy.form</field>
         <field name="model">mf.soh.discrepancy</field>
@@ -1128,10 +1230,14 @@ git commit -m "feat(phase2): add MF order pipeline kanban view"
                     <button name="action_mark_investigated"
                             string="Mark Investigated"
                             type="object"
-                            class="btn-primary"
-                            attrs="{'invisible': [('state', '=', 'investigated')]}"/>
+                            attrs="{'invisible': [('state', '!=', 'open')]}"/>
+                    <button name="%(action_mf_accept_discrepancy_wizard)d"
+                            string="Accept as Shrinkage"
+                            type="action"
+                            class="btn-warning"
+                            attrs="{'invisible': [('state', '=', 'accepted')]}"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="open,investigated"/>
+                           statusbar_visible="open,investigated,accepted"/>
                 </header>
                 <sheet>
                     <group>
@@ -1150,6 +1256,11 @@ git commit -m "feat(phase2): add MF order pipeline kanban view"
                         <field name="detected_date" readonly="1"/>
                         <field name="investigated_by" readonly="1"/>
                         <field name="investigated_date" readonly="1"/>
+                    </group>
+                    <group string="Acceptance" attrs="{'invisible': [('state', '!=', 'accepted')]}">
+                        <field name="accepted_by" readonly="1"/>
+                        <field name="accepted_date" readonly="1"/>
+                        <field name="accept_reason" readonly="1"/>
                     </group>
                 </sheet>
             </form>
@@ -1357,6 +1468,19 @@ registry.category("actions").add("mf_kpi_dashboard", MfKpiDashboard);
                     </div>
                 </div>
 
+                <!-- Shrinkage -->
+                <div class="col-sm-6 col-lg-3">
+                    <div t-attf-class="card h-100 mf-kpi-card #{ragClass(s.shrinkage.rag)}">
+                        <div class="card-body text-center">
+                            <div class="mf-kpi-value" t-esc="formatPct(s.shrinkage.value)"/>
+                            <div class="mf-kpi-label">Shrinkage (YTD)</div>
+                            <div class="mf-kpi-target text-muted small">
+                                Target: &lt;<t t-esc="s.targets.shrinkage_target"/>%/yr
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- In Flight -->
                 <div class="col-sm-6 col-lg-3">
                     <div t-attf-class="card h-100 mf-kpi-card mf-kpi-neutral"
@@ -1521,6 +1645,10 @@ Replace entirely:
         <field name="key">stock_3pl_mainfreight.discrepancy_archive_days</field>
         <field name="value">90</field>
     </record>
+    <record id="param_kpi_shrinkage_target" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kpi_shrinkage_target</field>
+        <field name="value">0.5</field>
+    </record>
 </odoo>
 ```
 
@@ -1610,17 +1738,18 @@ Apply any HIGH/MEDIUM suggestions as amendments to the relevant tasks above, the
 
 | Task | New Files | Key Behaviour |
 |---|---|---|
-| 1 | `soh_discrepancy.py` | `mf.soh.discrepancy` model, ACL |
-| 2 | — | `mf_resolved` status, `x_mf_assigned_to`, action methods |
-| 3 | `reassign_warehouse_wizard.py` | TransientModel wizard |
-| 4 | `kpi_dashboard.py` | DIFOT, IRA, exception rate, today summary |
+| 1 | `soh_discrepancy.py` | `mf.soh.discrepancy` model — open/investigated/accepted states, `action_accept_discrepancy()` writes Odoo quant |
+| 2 | — | `mf_resolved` status, `x_mf_assigned_to`, exception action methods |
+| 3 | `reassign_warehouse_wizard.py` | TransientModel reassign wizard |
+| 4 | `kpi_dashboard.py` | DIFOT, IRA, exception rate, **shrinkage %**, today summary |
 | 5 | — | `inventory_report.py` extended to write discrepancy records |
-| 6 | — | `exception_views.xml` replaced with full tree/form |
+| 6 | — | `exception_views.xml` full tree/form with action buttons |
 | 7 | `pipeline_views.xml` | Kanban grouped by `x_mf_status` |
-| 8 | `discrepancy_views.xml` | Discrepancy tree/form |
-| 9 | `mf_kpi_dashboard.js/.xml`, `kpi_dashboard_action.xml` | OWL dashboard |
-| 10 | `phase2_defaults.xml` | Menu, manifest v2, config params |
+| 8 | `discrepancy_views.xml` | Discrepancy tree/form with **Accept wizard** |
+| 9 | `mf_kpi_dashboard.js/.xml`, `kpi_dashboard_action.xml` | OWL dashboard with **4 KPI cards incl. Shrinkage** |
+| 10 | `phase2_defaults.xml` | Menu, manifest v2, 8 config params incl. shrinkage target |
 | 11 | — | Frontend design review gate |
 
-**Test additions:** ~60 new pure-Python tests across Tasks 1, 2, 3, 4, 5.
-**New models:** `mf.soh.discrepancy`, `mf.kpi.dashboard`, `mf.reassign.warehouse.wizard`
+**Test additions:** ~70 new pure-Python tests across Tasks 1, 2, 3, 4, 5.
+**New models:** `mf.soh.discrepancy`, `mf.kpi.dashboard`, `mf.reassign.warehouse.wizard`, `mf.accept.discrepancy.wizard`
+**KPI cards (dashboard):** DIFOT, IRA, Exception Rate, Shrinkage (YTD)
