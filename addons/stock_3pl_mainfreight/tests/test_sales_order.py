@@ -2,6 +2,8 @@
 from odoo.tests import TransactionCase, tagged
 from lxml import etree
 
+_XML_PARSER = etree.XMLParser(resolve_entities=False, no_network=True)
+
 
 @tagged('post_install', '-at_install', 'mf_so')
 class TestSalesOrderDocument(TransactionCase):
@@ -49,27 +51,27 @@ class TestSalesOrderDocument(TransactionCase):
 
     def test_xml_root_is_order(self):
         xml = self._build()
-        root = etree.fromstring(xml.encode())
+        root = etree.fromstring(xml.encode(), _XML_PARSER)
         self.assertEqual(root.tag, 'Order')
 
     def test_client_order_number_maps_to_so_name(self):
         xml = self._build()
-        root = etree.fromstring(xml.encode())
+        root = etree.fromstring(xml.encode(), _XML_PARSER)
         self.assertEqual(root.findtext('ClientOrderNumber'), 'SO001')
 
     def test_consignee_code_maps_to_partner_ref(self):
         xml = self._build()
-        root = etree.fromstring(xml.encode())
+        root = etree.fromstring(xml.encode(), _XML_PARSER)
         self.assertEqual(root.findtext('ConsigneeCode'), 'CUST001')
 
     def test_warehouse_code_from_connector(self):
         xml = self._build()
-        root = etree.fromstring(xml.encode())
+        root = etree.fromstring(xml.encode(), _XML_PARSER)
         self.assertEqual(root.findtext('WarehouseCode'), '99')
 
     def test_order_lines_present(self):
         xml = self._build()
-        root = etree.fromstring(xml.encode())
+        root = etree.fromstring(xml.encode(), _XML_PARSER)
         lines = root.findall('Lines/Line')
         self.assertEqual(len(lines), 1)
         self.assertEqual(lines[0].findtext('ProductCode'), 'WIDG001')
@@ -84,7 +86,7 @@ class TestSalesOrderDocument(TransactionCase):
 
     def test_customer_id_from_connector(self):
         xml = self._build()
-        root = etree.fromstring(xml.encode())
+        root = etree.fromstring(xml.encode(), _XML_PARSER)
         self.assertEqual(root.findtext('CustomerID'), '123456')
 
     def test_idempotency_key_is_deterministic(self):

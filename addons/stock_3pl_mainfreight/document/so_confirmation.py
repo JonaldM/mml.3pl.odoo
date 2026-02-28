@@ -6,6 +6,8 @@ from odoo.addons.stock_3pl_core.models.document_base import AbstractDocument
 
 _logger = logging.getLogger(__name__)
 
+_XML_PARSER = etree.XMLParser(resolve_entities=False, no_network=True)
+
 
 class SOConfirmationDocument(AbstractDocument):
     document_type = 'so_confirmation'
@@ -16,7 +18,7 @@ class SOConfirmationDocument(AbstractDocument):
 
     def parse_inbound(self, payload):
         """Parse MF SO Confirmation XML (SCH + SCL) into a structured dict."""
-        root = etree.fromstring(payload.encode('utf-8'))
+        root = etree.fromstring(payload.encode('utf-8'), _XML_PARSER)
         sch = root.find('SCH') or root
         lines = []
         for scl in sch.findall('Lines/SCL'):
