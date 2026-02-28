@@ -36,6 +36,8 @@ class SOConfirmationDocument(AbstractDocument):
 
     def apply_inbound(self, message):
         """Apply parsed SO Confirmation to Odoo: update picking status, connote, move qtys."""
+        if not message.payload_xml:
+            raise ValueError(f'No XML payload on message {message.id} — cannot apply SO Confirmation')
         parsed = self.parse_inbound(message.payload_xml)
         order = self.env['sale.order'].search(
             [('name', '=', parsed['reference'])], limit=1
@@ -60,6 +62,7 @@ class SOConfirmationDocument(AbstractDocument):
         # Set x_mf_status if field exists (added in Task 16)
         if hasattr(picking, 'x_mf_status'):
             picking.x_mf_status = 'mf_dispatched'
+        if hasattr(picking, 'x_mf_connote'):
             picking.x_mf_connote = parsed['consignment_no']
 
         # Match carrier by name
