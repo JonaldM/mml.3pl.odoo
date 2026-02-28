@@ -11,6 +11,7 @@ DIRECTION = [('outbound', 'Outbound'), ('inbound', 'Inbound')]
 DOCUMENT_TYPE = [
     ('product_spec', 'Product Specification'),
     ('sales_order', 'Sales Order'),
+    ('so_acknowledgement', 'SO Acknowledgement'),
     ('inward_order', 'Inward Order'),
     ('so_confirmation', 'SO Confirmation'),
     ('inward_confirmation', 'Inward Confirmation'),
