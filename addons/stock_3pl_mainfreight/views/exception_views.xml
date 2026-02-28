@@ -35,7 +35,7 @@
         <field name="model">stock.picking</field>
         <field name="arch" type="xml">
             <tree string="MF Exceptions" decoration-danger="True" default_order="write_date desc">
-                <field name="name" string="Reference"/>
+                <field name="name" string="SO / Reference"/>
                 <field name="partner_id" string="Partner"/>
                 <field name="picking_type_id" string="Operation"/>
                 <field name="x_mf_connote" string="Connote"/>
@@ -72,14 +72,7 @@
                         class="btn-warning"
                         attrs="{'invisible': [('x_mf_status', 'not in', ['mf_exception', 'mf_held_review'])]}"/>
             </xpath>
-            <xpath expr="//field[@name='partner_id']" position="after">
-                <field name="x_mf_status" readonly="1"
-                       attrs="{'invisible': [('x_mf_status', '=', False)]}"/>
-                <field name="x_mf_assigned_to"
-                       attrs="{'invisible': [('x_mf_status', 'not in', ['mf_exception', 'mf_resolved'])]}"/>
-                <field name="x_mf_connote" readonly="1"
-                       attrs="{'invisible': [('x_mf_connote', '=', False)]}"/>
-            </xpath>
+
         </field>
     </record>
 
@@ -96,7 +89,8 @@
         <field name="res_model">stock.picking</field>
         <field name="view_mode">tree,form</field>
         <field name="view_id" ref="view_mf_exception_tree"/>
-        <field name="domain">[('x_mf_status', '=', 'mf_exception')]</field>
+        <field name="domain">[('x_mf_status', 'in', ['mf_exception'])]</field>
+        <field name="context">{'search_default_group_assigned': 0}</field>
     </record>
 
     <record id="action_mf_order_pipeline" model="ir.actions.act_window">
