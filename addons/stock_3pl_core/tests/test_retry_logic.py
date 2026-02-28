@@ -52,3 +52,18 @@ class TestRetryLogic(TransactionCase):
         msg = self._make_queued_message()
         self.env['3pl.message']._process_outbound_queue()
         self.assertEqual(msg.state, 'dead')
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.post')
+    def test_process_queued_at_max_retry_dead_letters(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=500, text='Error')
+        msg = self.env['3pl.message'].create({
+            'connector_id': self.connector.id,
+            'direction': 'outbound',
+            'document_type': 'sales_order',
+            'action': 'create',
+            'payload_xml': '<test/>',
+            'state': 'queued',
+            'retry_count': 2,  # Already at MAX_RETRIES - 1
+        })
+        self.env['3pl.message']._process_outbound_queue()
+        self.assertEqual(msg.state, 'dead')

@@ -171,18 +171,27 @@ class ThreePlMessage(models.Model):
     def _process_outbound_queue(self):
         """Called by cron. Processes all queued outbound messages.
 
-        For each queued message:
-        - Marks it as sending
+        Also recovers messages orphaned in 'sending' state from a prior crashed run
+        by treating them as if they had just been queued.
+
+        For each message:
+        - Re-checks state before acting (handles concurrent cron runs)
+        - Marks it as 'sending'
         - Calls the connector's transport adapter
         - On success: marks sent
-        - On validation failure (422): dead-letters immediately (no retry)
-        - On retriable failure (5xx, network): increments retry_count or dead-letters at MAX_RETRIES
+        - On validation failure: dead-letters immediately (no retry)
+        - On retriable failure: increments retry_count or dead-letters at MAX_RETRIES
         """
-        queued = self.search([
-            ('state', '=', 'queued'),
+        candidates = self.search([
             ('direction', '=', 'outbound'),
+            ('state', 'in', ['queued', 'sending']),
         ])
-        for msg in queued:
+        for msg in candidates:
+            # Re-check state to guard against concurrent cron runs picking up the
+            # same record. A fresh read ensures we see the committed DB state.
+            msg.invalidate_recordset()
+            if msg.state not in ('queued', 'sending'):
+                continue
             try:
                 msg.action_sending()
                 transport = msg.connector_id.get_transport()
@@ -199,13 +208,29 @@ class ThreePlMessage(models.Model):
                     msg.action_fail(result.get('error', 'Unknown error'))
             except Exception as e:
                 _logger.error('Error processing 3PL message %s: %s', msg.id, e)
-                msg.action_fail(str(e))
+                try:
+                    msg.action_fail(str(e))
+                except Exception as inner_e:
+                    _logger.error(
+                        'Failed to dead-letter message %s after error: %s',
+                        msg.id, inner_e,
+                    )
 
     def _detect_content_type(self):
-        """Detect payload type from which payload field is populated."""
+        """Detect payload content type from which payload field is populated.
+
+        Raises ValidationError if no payload is set — sending an empty payload
+        would produce a confusing error at the 3PL endpoint.
+        """
         self.ensure_one()
         if self.payload_xml:
             return 'xml'
         if self.payload_json:
             return 'json'
-        return 'csv'
+        if self.payload_csv:
+            return 'csv'
+        from odoo.exceptions import ValidationError
+        raise ValidationError(
+            f'3PL message {self.id} has no payload to send (payload_xml, '
+            f'payload_json, and payload_csv are all empty).'
+        )
