@@ -209,9 +209,9 @@ class ThreePlMessage(models.Model):
                 else:
                     msg.action_fail(result.get('error', 'Unknown error'))
             except Exception as e:
-                _logger.error('Error processing 3PL message %s: %s', msg.id, e)
+                _logger.exception('3pl.message %s failed: %s', msg.id, e)
                 try:
-                    msg.action_fail(str(e))
+                    msg.action_fail(str(e)[:500])
                 except Exception as inner_e:
                     _logger.error(
                         'Failed to dead-letter message %s after error: %s',
@@ -247,7 +247,14 @@ class ThreePlMessage(models.Model):
             try:
                 transport = connector.get_transport()
                 payloads = transport.poll()
-                for raw in payloads:
+                for item in payloads:
+                    if isinstance(item, tuple):
+                        _filename, raw = item
+                    else:
+                        raw = item
+                    if not raw or not raw.strip():
+                        _logger.debug('_poll_inbound: skipping empty payload')
+                        continue
                     source_hash = hashlib.sha256(raw.encode('utf-8')).hexdigest()
                     existing = self.search([
                         ('connector_id', '=', connector.id),

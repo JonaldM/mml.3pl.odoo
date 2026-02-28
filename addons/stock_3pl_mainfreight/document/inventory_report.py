@@ -18,6 +18,22 @@ def _validate_ref(value, field_name, max_len=256):
     return value.strip()
 
 
+def _safe_int(val, default=0):
+    """Convert val to int via float, returning default on ValueError/OverflowError."""
+    try:
+        return int(float(val or default))
+    except (ValueError, OverflowError):
+        return default
+
+
+def _safe_float(val, default=0.0):
+    """Convert val to float, returning default on ValueError/OverflowError."""
+    try:
+        return float(val or default)
+    except (ValueError, OverflowError):
+        return default
+
+
 class InventoryReportDocument(AbstractDocument):
     """Parser for MF Stock On Hand (SOH) daily inventory report CSV.
 
@@ -42,10 +58,10 @@ class InventoryReportDocument(AbstractDocument):
             lines.append({
                 'product_code': row.get('Product', '').strip(),
                 'warehouse_id': row.get('WarehouseID', '').strip(),
-                'stock_on_hand': int(float(row.get('StockOnHand', 0) or 0)),
-                'qty_on_hold': int(float(row.get('QuantityOnHold', 0) or 0)),
-                'qty_damaged': int(float(row.get('QuantityDamaged', 0) or 0)),
-                'quantity_available': int(float(row.get('QuantityAvailable', 0) or 0)),
+                'stock_on_hand': _safe_float(row.get('StockOnHand', 0) or 0),
+                'qty_on_hold': _safe_int(row.get('QuantityOnHold', 0) or 0),
+                'qty_damaged': _safe_int(row.get('QuantityDamaged', 0) or 0),
+                'quantity_available': _safe_int(row.get('QuantityAvailable', 0) or 0),
                 'grade1': row.get('Grade1', '').strip(),
                 'grade2': row.get('Grade2', '').strip(),
                 'expiry_date': self._parse_date(row.get('ExpiryDate', '')),
@@ -102,7 +118,7 @@ class InventoryReportDocument(AbstractDocument):
         if report_date:
             # Record when this report was applied (not the report's date).
             # last_soh_applied_at is used by is_stale() to reject older reports.
-            self.connector.last_soh_applied_at = fields.Datetime.now()
+            self.connector.sudo().write({'last_soh_applied_at': fields.Datetime.now()})
 
     def apply_inbound(self, message):
         """Apply inbound inventory report from a 3pl.message record."""

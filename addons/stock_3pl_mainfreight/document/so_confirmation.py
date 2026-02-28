@@ -34,7 +34,7 @@ class SOConfirmationDocument(AbstractDocument):
         for scl in sch.findall('Lines/SCL'):
             lines.append({
                 'product_code': scl.findtext('ProductCode', '').strip(),
-                'qty_done': float(scl.findtext('UnitsFulfilled', '0') or 0),
+                'qty_done': float(scl.findtext('UnitsFulfilled', '0').strip() or '0'),
                 'lot_number': scl.findtext('LotNumber', '').strip(),
             })
         return {
@@ -65,25 +65,24 @@ class SOConfirmationDocument(AbstractDocument):
             _logger.warning('MF: No open picking found for order %s', parsed['reference'])
             return
 
-        write_vals = {'carrier_tracking_ref': parsed['consignment_no']}
+        write_vals = {
+            'carrier_tracking_ref': parsed['consignment_no'],
+            'x_mf_status': 'mf_dispatched',
+        }
+        if parsed.get('consignment_no'):
+            write_vals['x_mf_connote'] = parsed['consignment_no']
         if parsed['finalised_date']:
             write_vals['date_done'] = parsed['finalised_date']
         if parsed['eta_date']:
             write_vals['scheduled_date'] = parsed['eta_date']
         picking.write(write_vals)
 
-        # Set x_mf_status if field exists (added in Task 16)
-        if hasattr(picking, 'x_mf_status'):
-            picking.x_mf_status = 'mf_dispatched'
-        if hasattr(picking, 'x_mf_connote'):
-            picking.x_mf_connote = parsed['consignment_no']
-
         # Match carrier by name
         if parsed['carrier_name']:
             try:
                 carrier_name = _validate_ref(parsed['carrier_name'], 'carrier name')
                 carrier = self.env['delivery.carrier'].search(
-                    [('name', 'ilike', carrier_name)], limit=1
+                    [('name', '=', carrier_name)], limit=1
                 )
                 if carrier:
                     picking.carrier_id = carrier
@@ -103,7 +102,7 @@ class SOConfirmationDocument(AbstractDocument):
                 [('default_code', '=', product_code)], limit=1
             )
             if product:
-                move = picking.move_lines.filtered(
+                move = picking.move_ids.filtered(
                     lambda m: m.product_id == product
                 )[:1]
                 if move and move.move_line_ids:

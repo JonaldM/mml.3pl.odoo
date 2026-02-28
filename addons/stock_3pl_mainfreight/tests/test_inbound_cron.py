@@ -128,20 +128,23 @@ class TestMFInboundCronModel(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Tests: _run_mf_inbound — calls both sub-methods
+# Tests: _run_mf_inbound — calls all three sub-methods
 # ---------------------------------------------------------------------------
 
 class TestRunMFInbound(unittest.TestCase):
-    """_run_mf_inbound must call both _poll_inventory_reports and _reconcile_sent_orders."""
+    """_run_mf_inbound must call all three sub-methods in the correct order."""
 
-    def test_run_mf_inbound_calls_both_methods(self):
-        """Both sub-methods are invoked exactly once."""
+    def test_run_mf_inbound_calls_all_three_methods(self):
+        """All three sub-methods are invoked exactly once in order: poll, process, reconcile."""
         cron = object.__new__(MFInboundCron)
         cron.env = MagicMock()
 
         call_order = []
         cron._poll_inventory_reports = MagicMock(
             side_effect=lambda: call_order.append('poll')
+        )
+        cron._process_inbound_messages = MagicMock(
+            side_effect=lambda: call_order.append('process')
         )
         cron._reconcile_sent_orders = MagicMock(
             side_effect=lambda: call_order.append('reconcile')
@@ -149,18 +152,22 @@ class TestRunMFInbound(unittest.TestCase):
 
         cron._run_mf_inbound()
 
-        self.assertEqual(call_order, ['poll', 'reconcile'])
+        self.assertEqual(call_order, ['poll', 'process', 'reconcile'])
         cron._poll_inventory_reports.assert_called_once()
+        cron._process_inbound_messages.assert_called_once()
         cron._reconcile_sent_orders.assert_called_once()
 
     def test_run_mf_inbound_calls_poll_before_reconcile(self):
-        """Poll must execute before reconciliation."""
+        """Poll must execute before reconciliation, with process in between."""
         cron = object.__new__(MFInboundCron)
         cron.env = MagicMock()
         call_order = []
 
         cron._poll_inventory_reports = MagicMock(
             side_effect=lambda: call_order.append('poll')
+        )
+        cron._process_inbound_messages = MagicMock(
+            side_effect=lambda: call_order.append('process')
         )
         cron._reconcile_sent_orders = MagicMock(
             side_effect=lambda: call_order.append('reconcile')
@@ -169,7 +176,8 @@ class TestRunMFInbound(unittest.TestCase):
         cron._run_mf_inbound()
 
         self.assertEqual(call_order.index('poll'), 0)
-        self.assertEqual(call_order.index('reconcile'), 1)
+        self.assertEqual(call_order.index('process'), 1)
+        self.assertEqual(call_order.index('reconcile'), 2)
 
 
 # ---------------------------------------------------------------------------

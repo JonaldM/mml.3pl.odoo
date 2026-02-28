@@ -1,6 +1,7 @@
 # addons/stock_3pl_core/transport/http_post.py
 import requests
 import logging
+from urllib.parse import quote
 
 from odoo.addons.stock_3pl_core.models.transport_base import AbstractTransport
 
@@ -17,7 +18,7 @@ class HttpPostTransport(AbstractTransport):
     def send(self, payload, content_type='xml', filename=None, endpoint=None):
         url = self.connector.http_post_url
         transport_name = self.connector.http_transport_name
-        full_url = f'{url}?TransportName={transport_name}'
+        full_url = f'{url}?TransportName={quote(transport_name, safe="")}'
         data = payload if isinstance(payload, bytes) else payload.encode('utf-8')
         try:
             resp = requests.post(
@@ -28,11 +29,13 @@ class HttpPostTransport(AbstractTransport):
             )
             if resp.status_code in (200, 201):
                 return self._success()
-            if 400 <= resp.status_code < 500 and resp.status_code != 429:
+            elif resp.status_code == 409:
+                return self._success(note='already_exists')
+            elif 400 <= resp.status_code < 500 and resp.status_code != 429:
                 _logger.error('HTTP POST validation failure %s: %s', resp.status_code, resp.text[:200])
-                return self._validation_error(f'HTTP {resp.status_code}: {resp.text}')
+                return self._validation_error(f'HTTP {resp.status_code}: {resp.text[:500]}')
             _logger.warning('HTTP POST server error %s: %s', resp.status_code, resp.text[:200])
-            return self._retriable_error(f'HTTP {resp.status_code}: {resp.text}')
+            return self._retriable_error(f'HTTP {resp.status_code}: {resp.text[:500]}')
         except requests.Timeout:
             _logger.warning('HTTP POST timed out: %s', full_url)
             return self._retriable_error('Request timed out')

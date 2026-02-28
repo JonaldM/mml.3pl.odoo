@@ -167,25 +167,25 @@ class TestDecryptCredential(unittest.TestCase):
         self.assertEqual(decrypt_credential(env, ''), '')
         self.assertIsNone(decrypt_credential(env, None))
 
-    def test_decrypt_bad_token_returns_raw_value_without_raising(self):
-        """A corrupted 'enc:' value logs an error but does NOT raise — returns raw."""
+    def test_decrypt_bad_token_returns_empty_string_without_raising(self):
+        """A corrupted 'enc:' value logs an error but does NOT raise — returns ''."""
         env = _make_env()
         corrupt = _PREFIX + 'this_is_not_a_valid_fernet_token=='
         # Must not raise
         result = decrypt_credential(env, corrupt)
-        # Returns the raw (corrupt) value
-        self.assertEqual(result, corrupt)
+        # Returns empty string, not the raw ciphertext (avoids leaking it to callers)
+        self.assertEqual(result, '')
 
-    def test_decrypt_with_wrong_key_returns_raw_without_raising(self):
-        """Decrypting with a mismatched key returns the raw value without raising."""
+    def test_decrypt_with_wrong_key_returns_empty_string_without_raising(self):
+        """Decrypting with a mismatched key returns '' without raising."""
         env_a = _make_env()
         env_b = _make_env()   # different env → different key generated
 
         ciphertext = encrypt_credential(env_a, 'secret_for_env_a')
         # Attempt to decrypt with env_b's key (wrong key)
         result = decrypt_credential(env_b, ciphertext)
-        # Should not raise; raw value is returned
-        self.assertEqual(result, ciphertext)
+        # Should not raise; returns empty string, not the raw ciphertext
+        self.assertEqual(result, '')
 
     def test_roundtrip_preserves_special_characters(self):
         """Special characters, unicode, and symbols survive the encrypt/decrypt cycle."""

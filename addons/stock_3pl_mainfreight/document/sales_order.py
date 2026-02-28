@@ -51,7 +51,7 @@ class SalesOrderDocument(AbstractDocument):
             self._add(line_el, 'LineNumber', str(i))
             self._add(line_el, 'ProductCode',
                       line.product_id.default_code or '', max_len=40)
-            self._add(line_el, 'Units', str(int(line.product_uom_qty)))
+            self._add(line_el, 'Units', str(round(line.product_uom_qty)))
             self._add(line_el, 'UnitPrice', f'{line.price_unit:.2f}')
 
         return etree.tostring(root, pretty_print=True, xml_declaration=True,

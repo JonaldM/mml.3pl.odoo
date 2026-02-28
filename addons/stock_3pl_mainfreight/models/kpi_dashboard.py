@@ -130,6 +130,7 @@ class MfKpiDashboard(models.AbstractModel):
     @api.model
     def get_weekly_trend(self, weeks: int = 13) -> list:
         """Return weekly order counts by status for the trend chart (last N weeks)."""
+        weeks = max(1, min(int(weeks), 52))
         now = fields.Datetime.now()
         result = []
         for i in range(weeks - 1, -1, -1):

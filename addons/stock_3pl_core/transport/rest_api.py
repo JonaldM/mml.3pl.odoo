@@ -1,6 +1,8 @@
 # addons/stock_3pl_core/transport/rest_api.py
 import requests
 import logging
+import ipaddress
+from urllib.parse import urlparse
 from odoo.addons.stock_3pl_core.models.transport_base import AbstractTransport
 
 _logger = logging.getLogger(__name__)
@@ -23,8 +25,25 @@ class RestTransport(AbstractTransport):
         """
         return self.connector.get_credential('api_secret') or ''
 
+    def _validate_url(self, url: str) -> None:
+        """Raise ValueError if URL is not a safe HTTPS endpoint."""
+        parsed = urlparse(url)
+        if parsed.scheme != 'https':
+            raise ValueError(f'RestTransport: URL must use HTTPS, got: {parsed.scheme}://')
+        # Block RFC-1918 and link-local ranges
+        try:
+            ip = ipaddress.ip_address(parsed.hostname)
+            if ip.is_private or ip.is_link_local or ip.is_loopback:
+                raise ValueError(f'RestTransport: URL resolves to private/internal address: {parsed.hostname}')
+        except ValueError as e:
+            if 'RestTransport' in str(e):
+                raise
+            # hostname is a domain name, not an IP — allow it
+            pass
+
     def send(self, payload, content_type='xml', filename=None, endpoint=None):
         url = endpoint or self.connector.api_url
+        self._validate_url(url)
         headers = {
             'Content-Type': CONTENT_TYPES.get(content_type, 'application/xml'),
             'Authorization': f'Bearer {self._get_auth_secret()}',
@@ -59,6 +78,7 @@ class RestTransport(AbstractTransport):
         Returns [] on any error or non-200 response.
         """
         url = path or self.connector.api_url
+        self._validate_url(url)
         headers = {'Authorization': f'Bearer {self._get_auth_secret()}'}
         try:
             resp = requests.get(url, headers=headers, timeout=30)

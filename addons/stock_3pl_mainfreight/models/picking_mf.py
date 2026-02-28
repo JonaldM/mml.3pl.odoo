@@ -1,4 +1,5 @@
 # addons/stock_3pl_mainfreight/models/picking_mf.py
+import html
 from odoo import models, fields
 from odoo.exceptions import UserError
 
@@ -101,10 +102,10 @@ class StockPickingMF(models.Model):
                 user_id=escalation_user_id,
                 note=f'MF Exception escalated: {picking.name}',
             )
-            picking.message_post(body=f'Escalated by {self.env.user.name}.')
+            picking.message_post(body=f'Escalated by {html.escape(self.env.user.name)}.')
 
     def _message_log_batch(self, template):
         """Post a chatter message to each picking using a template with %(user)s."""
         user = self.env.user.name
         for picking in self:
-            picking.message_post(body=template % {'user': user})
+            picking.message_post(body=template % {'user': html.escape(str(user))})

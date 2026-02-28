@@ -192,7 +192,7 @@ class TestApplyRoutingSingle(unittest.TestCase):
         wh = _make_warehouse('WH-NZ')
         picking = _make_picking()
         # No moves to relocate — filtered returns empty list
-        picking.move_lines.filtered.return_value = []
+        picking.move_ids.filtered.return_value = []
 
         order = _make_order_with_picking(picking)
         assignments = [_make_assignment(wh, [(prod, 5.0)])]
@@ -216,7 +216,7 @@ class TestApplyRoutingSingle(unittest.TestCase):
         prod = _make_product()
         wh = _make_warehouse('WH-NZ')
         picking = _make_picking()
-        picking.move_lines.filtered.return_value = []
+        picking.move_ids.filtered.return_value = []
 
         order = _make_order_with_picking(picking)
         assignments = [_make_assignment(wh, [(prod, 5.0)])]
@@ -237,7 +237,7 @@ class TestApplyRoutingSingle(unittest.TestCase):
         wh = _make_warehouse('WH-NZ')
 
         picking_a = _make_picking()
-        picking_a.move_lines.filtered.return_value = []
+        picking_a.move_ids.filtered.return_value = []
         picking_b = _make_picking()
 
         # Mock order with 2 unrouted pickings
@@ -276,13 +276,13 @@ class TestApplyRoutingSplit(unittest.TestCase):
         """Return an env['stock.picking'] mock suitable for split (2-assignment) tests.
 
         create() returns picking2.
-        search().move_lines.filtered() returns a MagicMock (not a list) so that
+        search().move_ids.filtered() returns a MagicMock (not a list) so that
         moves.write(...) succeeds — MagicMock has .write() by default.
         """
         picking_class_mock = MagicMock()
         picking_class_mock.create.return_value = picking2
         # filtered must return a MagicMock so that .write() is available on it
-        picking_class_mock.search.return_value.move_lines.filtered.return_value = MagicMock()
+        picking_class_mock.search.return_value.move_ids.filtered.return_value = MagicMock()
         return picking_class_mock
 
     def test_two_assignments_sets_x_mf_split_on_order(self):
@@ -294,7 +294,7 @@ class TestApplyRoutingSplit(unittest.TestCase):
         wh2 = _make_warehouse('WH-B')
 
         picking1 = _make_picking()
-        picking1.move_lines.filtered.return_value = []
+        picking1.move_ids.filtered.return_value = []
 
         order = _make_order_with_picking(picking1, name='SO002')
         order.partner_shipping_id = MagicMock()
@@ -322,7 +322,7 @@ class TestApplyRoutingSplit(unittest.TestCase):
         wh2 = _make_warehouse('WH-B')
 
         picking1 = _make_picking()
-        picking1.move_lines.filtered.return_value = []
+        picking1.move_ids.filtered.return_value = []
 
         order = _make_order_with_picking(picking1, name='SO002')
         order.partner_shipping_id = MagicMock()
@@ -354,7 +354,7 @@ class TestApplyRoutingSplit(unittest.TestCase):
         wh2 = _make_warehouse('WH-B')
 
         picking1 = _make_picking()
-        picking1.move_lines.filtered.return_value = []
+        picking1.move_ids.filtered.return_value = []
 
         order = _make_order_with_picking(picking1, name='SO002')
         order.partner_shipping_id = MagicMock()
@@ -393,7 +393,7 @@ class TestApplyRoutingCrossBorder(unittest.TestCase):
         prod = _make_product()
         wh = _make_warehouse('WH-NZ')
         picking = _make_picking()
-        picking.move_lines.filtered.return_value = []
+        picking.move_ids.filtered.return_value = []
 
         order = _make_order_with_picking(picking, name='SO003')
         assignments = [_make_assignment(wh, [(prod, 1.0)])]
@@ -415,7 +415,7 @@ class TestApplyRoutingCrossBorder(unittest.TestCase):
         prod = _make_product()
         wh = _make_warehouse('WH-NZ')
         picking = _make_picking()
-        picking.move_lines.filtered.return_value = []
+        picking.move_ids.filtered.return_value = []
 
         order = _make_order_with_picking(picking, name='SO003')
         assignments = [_make_assignment(wh, [(prod, 1.0)])]
@@ -440,7 +440,7 @@ class TestApplyRoutingNonCrossBorder(unittest.TestCase):
         prod = _make_product()
         wh = _make_warehouse('WH-AU')
         picking = _make_picking()
-        picking.move_lines.filtered.return_value = []
+        picking.move_ids.filtered.return_value = []
 
         order = _make_order_with_picking(picking, name='SO004')
         assignments = [_make_assignment(wh, [(prod, 2.0)])]
@@ -462,7 +462,7 @@ class TestApplyRoutingNonCrossBorder(unittest.TestCase):
         prod = _make_product()
         wh = _make_warehouse('WH-AU')
         picking = _make_picking()
-        picking.move_lines.filtered.return_value = []
+        picking.move_ids.filtered.return_value = []
 
         order = _make_order_with_picking(picking, name='SO004')
         assignments = [_make_assignment(wh, [(prod, 2.0)])]

@@ -6,7 +6,10 @@ _logger = logging.getLogger(__name__)
 
 SYNC_FIELDS = {
     'default_code', 'name', 'weight', 'volume', 'standard_price',
-    'description_sale', 'tracking',
+    'tracking',
+    # NOTE: description_sale lives on product.template, not product.product.
+    # Template-level field changes do not trigger this product.product write hook.
+    # A separate product.template hook would be needed to sync description_sale.
     # packaging_ids lives on product.template — hook that model separately if needed
 }
 

@@ -53,12 +53,12 @@ class MFSplitEngine(models.AbstractModel):
                     )
                 picking = unrouted[0]
                 # Move any moves NOT in this assignment to a new picking
-                moves_to_move = picking.move_lines.filtered(
+                moves_to_move = picking.move_ids.filtered(
                     lambda m: m.product_id not in line_products
                 )
                 if moves_to_move:
                     # If copy() raises, the transaction rolls back entirely; the cron will retry.
-                    new_picking = picking.copy({'move_lines': []})
+                    new_picking = picking.copy({'move_ids': []})
                     moves_to_move.write({'picking_id': new_picking.id})
                     _logger.info(
                         'split_engine: moved %d move(s) from picking %s to new picking %s',
@@ -82,7 +82,7 @@ class MFSplitEngine(models.AbstractModel):
                 moves = self.env['stock.picking'].search([
                     ('sale_id', '=', order.id),
                     ('state', 'not in', ('done', 'cancel')),
-                ]).move_lines.filtered(
+                ]).move_ids.filtered(
                     lambda m: m.product_id in line_products and not m.picking_id.x_mf_routed_by
                 )
                 moves.write({'picking_id': picking.id})

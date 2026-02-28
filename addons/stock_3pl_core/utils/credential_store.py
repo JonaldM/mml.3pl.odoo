@@ -81,7 +81,11 @@ def decrypt_credential(env, value: str) -> str:
     if not value:
         return value
     if not value.startswith(_PREFIX):
-        return value     # legacy plaintext — pass through silently
+        _logger.warning(
+            'decrypt_credential: credential is stored as plaintext — '
+            're-save the connector to encrypt it.'
+        )
+        return value
 
     try:
         from cryptography.fernet import Fernet
@@ -90,5 +94,8 @@ def decrypt_credential(env, value: str) -> str:
         token = value[len(_PREFIX):].encode()
         return f.decrypt(token).decode('utf-8')
     except Exception as exc:
-        _logger.error('decrypt_credential: failed to decrypt value: %s', exc)
-        return value
+        _logger.error(
+            'decrypt_credential: failed to decrypt stored credential — '
+            'the value may be corrupted or the encryption key may have changed: %s', exc
+        )
+        return ''
