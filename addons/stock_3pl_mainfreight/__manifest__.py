@@ -9,7 +9,6 @@
     'data': [
         'security/ir.model.access.csv',
         'views/connector_mf_views.xml',
-        'data/connector_mf_demo.xml',
     ],
     'demo': ['data/connector_mf_demo.xml'],
     'installable': True,

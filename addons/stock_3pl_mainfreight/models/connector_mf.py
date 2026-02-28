@@ -28,13 +28,13 @@ class ThreePlConnectorMF(models.Model):
         self.ensure_one()
         transport = self.get_transport()
         result = transport.send('<ping/>', endpoint=self._mf_endpoint('order'))
-        if result['success'] or result.get('note') == 'already_exists':
+        if result.get('success') or result.get('note') == 'already_exists':
             return self._notify('Connection to Mainfreight successful.')
         return self._notify(f"Connection failed: {result.get('error')}", error=True)
 
     def _mf_endpoint(self, resource):
         env = self.environment or 'test'
-        base = MF_ENVIRONMENTS[env]['rest_api']
+        base = MF_ENVIRONMENTS.get(env, MF_ENVIRONMENTS['test'])['rest_api']
         endpoints = {
             'order': f'{base}/Order',
             'inward': f'{base}/Inward',
