@@ -62,6 +62,8 @@ class MfKpiDashboard extends Component {
     }
 
     openEditTargets() {
+        // KPI targets are ir.config_parameter values; the connector settings form
+        // contains the target configuration fields per the Phase 2 UX design spec.
         this.actionService.doAction("stock_3pl_mainfreight.action_3pl_connector_config");
     }
 

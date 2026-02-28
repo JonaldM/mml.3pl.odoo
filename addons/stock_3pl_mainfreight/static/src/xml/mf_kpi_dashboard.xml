@@ -118,7 +118,7 @@
                 <div class="col-12">
                     <p class="text-muted small">
                         For trend charts, use the
-                        <a t-on-click.prevent="openExceptionQueue" href="#">Order Pipeline</a>
+                        <a t-on-click.prevent="openOrderPipeline" href="#">Order Pipeline</a>
                         graph view.
                     </p>
                 </div>
