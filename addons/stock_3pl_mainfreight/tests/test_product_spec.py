@@ -69,3 +69,24 @@ class TestProductSpec(TransactionCase):
         doc = ProductSpecDocument(self.connector, self.env)
         with self.assertRaises(ValidationError):
             doc.build_outbound(self.product)
+
+    def test_packaging_default_pack_columns_populated(self):
+        """Default Pack columns should populate from packaging_ids[0]."""
+        packaging = self.env['product.packaging'].create({
+            'name': 'EACH',
+            'product_id': self.product.product_tmpl_id.id,
+            'qty': 1.0,
+            'barcode': '1234567890123',
+        })
+        csv_str = self._build()
+        reader = csv.DictReader(io.StringIO(csv_str))
+        row = list(reader)[0]
+        self.assertEqual(int(row['Default Pack Size']), 1)
+        self.assertEqual(row['Default Pack Description'], 'EACH')
+        self.assertEqual(row['Default Barcode'], '1234567890123')
+
+    def test_warehouse_id_maps_from_connector(self):
+        csv_str = self._build()
+        reader = csv.DictReader(io.StringIO(csv_str))
+        row = list(reader)[0]
+        self.assertEqual(row['Warehouse ID'], self.connector.warehouse_code)
