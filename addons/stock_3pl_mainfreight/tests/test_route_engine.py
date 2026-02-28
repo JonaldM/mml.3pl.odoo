@@ -127,7 +127,7 @@ class TestGetMFWarehouses(unittest.TestCase):
         engine._get_mf_warehouses()
         engine.env['stock.warehouse'].search.assert_called_once_with(
             [('x_mf_enabled', '=', True)],
-            order='name',
+            order='x_mf_warehouse_code, name',
         )
 
     def test_returns_search_result(self):
@@ -420,6 +420,104 @@ class TestRouteOrderSingleLine(unittest.TestCase):
         self.assertGreater(len(result), 1)
         total = sum(qty for a in result for _p, qty in a['lines'])
         self.assertEqual(total, 10.0)
+
+
+class TestRouteOrderMultiLine(unittest.TestCase):
+    """Multi-product orders use greedy partial assignment across warehouses."""
+
+    def _make_routable_engine(self, wh_list, stock_map):
+        """stock_map: {product: {warehouse_name: qty}}"""
+        engine = object.__new__(MFRouteEngine)
+        engine.env = MagicMock()
+        engine._get_mf_warehouses = lambda: wh_list
+
+        def check_stock(wh, lines):
+            result = {}
+            for prod, _qty in lines:
+                result[prod] = stock_map.get(prod, {}).get(wh.name, 0.0)
+            return result
+
+        engine._check_stock = check_stock
+        return engine
+
+    def test_two_products_split_across_two_warehouses(self):
+        """WH-A has prod1 only; WH-B has prod2 only — each assigned to the right warehouse."""
+        wh1 = _make_warehouse('WH-A', lat=-33.0, lng=151.0)
+        wh2 = _make_warehouse('WH-B', lat=-37.0, lng=145.0)
+
+        prod1 = _make_product('Prod1')
+        prod2 = _make_product('Prod2')
+        # WH-A (closer to customer) has prod1 but not prod2
+        # WH-B has prod2 but not prod1
+        stock_map = {
+            prod1: {'WH-A': 10.0, 'WH-B': 0.0},
+            prod2: {'WH-A': 0.0, 'WH-B': 8.0},
+        }
+
+        engine = self._make_routable_engine([wh1, wh2], stock_map)
+
+        partner = MagicMock()
+        partner.partner_latitude = -34.0   # closer to WH-A
+        partner.partner_longitude = 151.0
+        partner.name = 'Customer'
+
+        order = MagicMock()
+        order.name = 'SO-MULTILINE'
+        order.partner_shipping_id = partner
+        order.order_line = [
+            _make_order_line(prod1, 5.0),
+            _make_order_line(prod2, 3.0),
+        ]
+        engine._order_lines = lambda o: [(prod1, 5.0), (prod2, 3.0)]
+
+        result = engine.route_order(order)
+        # Should produce 2 assignment dicts — one per warehouse
+        self.assertEqual(len(result), 2)
+        warehouses_used = {a['warehouse'].name for a in result}
+        self.assertIn('WH-A', warehouses_used)
+        self.assertIn('WH-B', warehouses_used)
+        # Total lines across all assignments = 2 products
+        all_lines = [line for a in result for line in a['lines']]
+        self.assertEqual(len(all_lines), 2)
+        total_qty = sum(qty for _p, qty in all_lines)
+        self.assertEqual(total_qty, 8.0)  # 5 + 3
+
+    def test_partial_fill_leaves_remainder_warning(self):
+        """If stock is exhausted before all lines are covered, remaining is logged."""
+        wh1 = _make_warehouse('WH-X', lat=-33.0, lng=151.0)
+
+        prod1 = _make_product('ProdX')
+        prod2 = _make_product('ProdY')
+        # WH-X has prod1 but no prod2
+        stock_map = {
+            prod1: {'WH-X': 5.0},
+            prod2: {'WH-X': 0.0},
+        }
+
+        engine = self._make_routable_engine([wh1], stock_map)
+
+        partner = MagicMock()
+        partner.partner_latitude = -34.0
+        partner.partner_longitude = 151.0
+        partner.name = 'Customer2'
+
+        order = MagicMock()
+        order.name = 'SO-PARTIAL'
+        order.partner_shipping_id = partner
+        order.order_line = [
+            _make_order_line(prod1, 5.0),
+            _make_order_line(prod2, 3.0),
+        ]
+        engine._order_lines = lambda o: [(prod1, 5.0), (prod2, 3.0)]
+
+        result = engine.route_order(order)
+        # prod1 assigned to WH-X; prod2 has no stock — result has only 1 assignment
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['warehouse'].name, 'WH-X')
+        # Only prod1 was assignable
+        assigned_products = [p for p, _q in result[0]['lines']]
+        self.assertIn(prod1, assigned_products)
+        self.assertNotIn(prod2, assigned_products)
 
 
 if __name__ == '__main__':

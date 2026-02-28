@@ -123,10 +123,10 @@ class MFRouteEngine(models.AbstractModel):
 
     @api.model
     def _get_mf_warehouses(self):
-        """Return all MF-enabled warehouses, ordered by name for determinism."""
+        """Return all MF-enabled warehouses, ordered by x_mf_warehouse_code then name for determinism."""
         return self.env['stock.warehouse'].search(
             [('x_mf_enabled', '=', True)],
-            order='name',
+            order='x_mf_warehouse_code, name',
         )
 
     @api.model
