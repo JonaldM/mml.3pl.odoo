@@ -1,4 +1,5 @@
 # addons/stock_3pl_core/tests/test_transport_rest.py
+import requests
 from unittest.mock import patch, MagicMock
 from odoo.tests import TransactionCase, tagged
 
@@ -54,3 +55,26 @@ class TestRestTransport(TransactionCase):
         result = transport.send('<Order/>', content_type='xml')
         self.assertFalse(result['success'])
         self.assertEqual(result['error_type'], 'retriable')
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.post')
+    def test_send_timeout_returns_retriable(self, mock_post):
+        mock_post.side_effect = requests.Timeout()
+        transport = self._make_transport()
+        result = transport.send('<Order/>', content_type='xml')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error_type'], 'retriable')
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.post')
+    def test_send_connection_error_returns_retriable(self, mock_post):
+        mock_post.side_effect = requests.ConnectionError('ECONNREFUSED')
+        transport = self._make_transport()
+        result = transport.send('<Order/>', content_type='xml')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error_type'], 'retriable')
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.get')
+    def test_poll_success_returns_list(self, mock_get):
+        mock_get.return_value = MagicMock(status_code=200, text='<response/>')
+        transport = self._make_transport()
+        results = transport.poll()
+        self.assertEqual(results, ['<response/>'])

@@ -21,11 +21,14 @@ class RestTransport(AbstractTransport):
             'Authorization': f'Bearer {self.connector.api_secret}',
         }
         try:
-            resp = requests.post(url, data=payload.encode('utf-8'), headers=headers, timeout=30)
+            data = payload if isinstance(payload, bytes) else payload.encode('utf-8')
+            resp = requests.post(url, data=data, headers=headers, timeout=30)
         except requests.Timeout:
             return self._retriable_error('Request timed out')
         except requests.ConnectionError as e:
             return self._retriable_error(f'Connection error: {e}')
+        except requests.exceptions.RequestException as e:
+            return self._retriable_error(f'Transport error: {e}')
 
         if resp.status_code in (200, 201):
             return self._success()
@@ -37,12 +40,19 @@ class RestTransport(AbstractTransport):
             return self._retriable_error(f'HTTP {resp.status_code}: {resp.text}')
 
     def poll(self, path=None):
+        """Poll the REST endpoint for inbound payloads.
+
+        Returns a single-element list containing the full response body on HTTP 200.
+        REST endpoints typically return a single payload (one document per response),
+        unlike SFTP which returns one element per file.
+        Returns [] on any error or non-200 response.
+        """
         url = path or self.connector.api_url
         headers = {'Authorization': f'Bearer {self.connector.api_secret}'}
         try:
             resp = requests.get(url, headers=headers, timeout=30)
             if resp.status_code == 200:
                 return [resp.text]
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             _logger.warning('REST poll failed: %s', e)
         return []
