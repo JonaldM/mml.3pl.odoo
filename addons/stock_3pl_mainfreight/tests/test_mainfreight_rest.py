@@ -8,6 +8,7 @@ import types
 import unittest
 import importlib.util
 import pathlib
+from unittest.mock import patch, MagicMock
 
 
 def _stub_odoo_for_transport():
@@ -41,9 +42,7 @@ def _stub_odoo_for_transport():
     sys.modules['odoo.addons.stock_3pl_core.transport'] = core_transport_pkg
     sys.modules['odoo.addons.stock_3pl_core.transport.rest_api'] = core_rest_mod
 
-    # Also stub the requests module reference used in mainfreight_rest.py
-    if 'requests' not in sys.modules:
-        import requests  # real requests — available in dev environment
+    # mainfreight_rest.py no longer imports requests directly; no stub needed.
 
 
 _stub_odoo_for_transport()
@@ -115,6 +114,85 @@ class TestGetBaseUrl(unittest.TestCase):
         """Test 3 (extended): _get_base_url defaults to test URL for empty environment."""
         transport = MainfreightRestTransport(_FakeConnector(''))
         self.assertEqual(transport._get_base_url(), MF_ENDPOINTS['test'])
+
+
+class TestSendOrderEndpoint(unittest.TestCase):
+
+    def test_send_order_uses_order_endpoint(self):
+        """send_order delegates to self.send with the /Order endpoint and xml content_type."""
+        transport = MainfreightRestTransport(_FakeConnector('test'))
+        with patch.object(transport, 'send', return_value={'success': True}) as mock_send:
+            transport.send_order('<Order/>')
+        mock_send.assert_called_once_with(
+            '<Order/>',
+            content_type='xml',
+            endpoint=f'{MF_ENDPOINTS["test"]}/Order',
+        )
+
+    def test_send_order_uses_production_endpoint_for_production(self):
+        """send_order uses the production base URL when environment == 'production'."""
+        transport = MainfreightRestTransport(_FakeConnector('production'))
+        with patch.object(transport, 'send', return_value={'success': True}) as mock_send:
+            transport.send_order('<Order/>')
+        mock_send.assert_called_once_with(
+            '<Order/>',
+            content_type='xml',
+            endpoint=f'{MF_ENDPOINTS["production"]}/Order',
+        )
+
+
+class TestSendInwardEndpoint(unittest.TestCase):
+
+    def test_send_inward_uses_inward_endpoint(self):
+        """send_inward delegates to self.send with the /Inward endpoint and xml content_type."""
+        transport = MainfreightRestTransport(_FakeConnector('test'))
+        with patch.object(transport, 'send', return_value={'success': True}) as mock_send:
+            transport.send_inward('<Inward/>')
+        mock_send.assert_called_once_with(
+            '<Inward/>',
+            content_type='xml',
+            endpoint=f'{MF_ENDPOINTS["test"]}/Inward',
+        )
+
+    def test_send_inward_uses_production_endpoint_for_production(self):
+        """send_inward uses the production base URL when environment == 'production'."""
+        transport = MainfreightRestTransport(_FakeConnector('production'))
+        with patch.object(transport, 'send', return_value={'success': True}) as mock_send:
+            transport.send_inward('<Inward/>')
+        mock_send.assert_called_once_with(
+            '<Inward/>',
+            content_type='xml',
+            endpoint=f'{MF_ENDPOINTS["production"]}/Inward',
+        )
+
+
+class TestGetStockOnHand(unittest.TestCase):
+
+    def test_get_stock_on_hand_calls_poll_with_soh_path(self):
+        """get_stock_on_hand delegates to self.poll with the /StockOnHand path."""
+        transport = MainfreightRestTransport(_FakeConnector('test'))
+        with patch.object(transport, 'poll', return_value=['csv-data']) as mock_poll:
+            result = transport.get_stock_on_hand()
+        mock_poll.assert_called_once_with(
+            path=f'{MF_ENDPOINTS["test"]}/StockOnHand',
+        )
+        self.assertEqual(result, ['csv-data'])
+
+    def test_get_stock_on_hand_returns_empty_list_on_poll_failure(self):
+        """get_stock_on_hand returns [] when poll returns empty (transport-level failure)."""
+        transport = MainfreightRestTransport(_FakeConnector('test'))
+        with patch.object(transport, 'poll', return_value=[]):
+            result = transport.get_stock_on_hand()
+        self.assertEqual(result, [])
+
+    def test_get_stock_on_hand_uses_production_soh_path(self):
+        """get_stock_on_hand uses the production base URL when environment == 'production'."""
+        transport = MainfreightRestTransport(_FakeConnector('production'))
+        with patch.object(transport, 'poll', return_value=[]) as mock_poll:
+            transport.get_stock_on_hand()
+        mock_poll.assert_called_once_with(
+            path=f'{MF_ENDPOINTS["production"]}/StockOnHand',
+        )
 
 
 if __name__ == '__main__':

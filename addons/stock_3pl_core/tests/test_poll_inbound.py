@@ -61,10 +61,15 @@ class TestDetectInboundType(unittest.TestCase):
         result = ThreePlMessage._detect_inbound_type(raw)
         self.assertEqual(result, 'so_confirmation')
 
-    def test_unrecognised_xml_defaults_to_inventory_report(self):
-        """Extra: unrecognised XML tag defaults to 'inventory_report'."""
+    def test_unrecognised_xml_returns_none(self):
+        """Extra: unrecognised XML root element returns None (not 'inventory_report')."""
         raw = '<UnknownDocument><Data/></UnknownDocument>'
         result = ThreePlMessage._detect_inbound_type(raw)
+        self.assertIsNone(result)
+
+    def test_empty_string_returns_inventory_report(self):
+        """Extra: empty string does not start with '<', so it is treated as empty CSV."""
+        result = ThreePlMessage._detect_inbound_type('')
         self.assertEqual(result, 'inventory_report')
 
 

@@ -1,5 +1,4 @@
 # addons/stock_3pl_mainfreight/transport/mainfreight_rest.py
-import requests
 import logging
 from odoo.addons.stock_3pl_core.transport.rest_api import RestTransport
 
@@ -26,12 +25,9 @@ class MainfreightRestTransport(RestTransport):
                          endpoint=f'{self._get_base_url()}/Inward')
 
     def get_stock_on_hand(self):
-        url = f'{self._get_base_url()}/StockOnHand'
-        headers = {'Authorization': f'Bearer {self.connector.api_secret}'}
-        try:
-            resp = requests.get(url, headers=headers, timeout=30)
-            if resp.status_code == 200:
-                return resp.text
-        except Exception as e:
-            _logger.warning('MF SOH poll failed: %s', e)
-        return None
+        """Poll the MF StockOnHand endpoint.
+
+        Returns a list containing the response body on success, or [] on failure.
+        Delegates to RestTransport.poll() to keep auth and retry logic in one place.
+        """
+        return self.poll(path=f'{self._get_base_url()}/StockOnHand')

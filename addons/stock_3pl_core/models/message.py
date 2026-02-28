@@ -248,17 +248,24 @@ class ThreePlMessage(models.Model):
                 transport = connector.get_transport()
                 payloads = transport.poll()
                 for raw in payloads:
-                    source_hash = hashlib.sha256(raw.encode()).hexdigest()
+                    source_hash = hashlib.sha256(raw.encode('utf-8')).hexdigest()
                     existing = self.search([
                         ('connector_id', '=', connector.id),
                         ('source_hash', '=', source_hash),
                     ], limit=1)
                     if existing:
                         continue  # Deduplicate
+                    doc_type = self._detect_inbound_type(raw)
+                    if doc_type is None:
+                        _logger.warning(
+                            'MF: unrecognised inbound payload from connector %s — skipping.',
+                            connector.name,
+                        )
+                        continue
                     self.create({
                         'connector_id': connector.id,
                         'direction': 'inbound',
-                        'document_type': self._detect_inbound_type(raw),
+                        'document_type': doc_type,
                         'payload_xml': raw if raw.strip().startswith('<') else False,
                         'payload_csv': raw if not raw.strip().startswith('<') else False,
                         'source_hash': source_hash,
@@ -269,10 +276,16 @@ class ThreePlMessage(models.Model):
 
     @staticmethod
     def _detect_inbound_type(raw):
-        """Detect document type from inbound payload content."""
-        raw = raw.strip()
-        if '<OrderConfirmation' in raw or '<SCH' in raw:
+        """Detect document type from inbound payload content.
+
+        Returns None if the content is XML but the root element is not recognised —
+        the caller should log a warning and skip rather than create a malformed record.
+        """
+        stripped = raw.strip()
+        if '<OrderConfirmation' in stripped or '<SCH' in stripped:
             return 'so_confirmation'
-        if '<InwardConfirmation' in raw:
+        if '<InwardConfirmation' in stripped:
             return 'inward_confirmation'
-        return 'inventory_report'  # Default: assume CSV = SOH report
+        if stripped.startswith('<'):
+            return None  # Unrecognised XML — do not store as inventory_report
+        return 'inventory_report'  # Non-XML content — assume SOH CSV
