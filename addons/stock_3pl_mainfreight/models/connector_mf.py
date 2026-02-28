@@ -18,10 +18,10 @@ class ThreePlConnectorMF(models.Model):
     _inherit = '3pl.connector'
 
     # MF REST API secrets (separate per API type per MF spec)
-    mf_warehousing_secret = fields.Char('Warehousing API Secret')
-    mf_label_secret = fields.Char('Label API Secret')
-    mf_rating_secret = fields.Char('Rating API Secret')
-    mf_tracking_secret = fields.Char('Tracking API Secret')
+    mf_warehousing_secret = fields.Char('Warehousing API Secret', password=True, groups='stock.group_stock_manager')
+    mf_label_secret = fields.Char('Label API Secret', password=True, groups='stock.group_stock_manager')
+    mf_rating_secret = fields.Char('Rating API Secret', password=True, groups='stock.group_stock_manager')
+    mf_tracking_secret = fields.Char('Tracking API Secret', password=True, groups='stock.group_stock_manager')
 
     def action_test_connection(self):
         """Test REST API connectivity to MF."""
