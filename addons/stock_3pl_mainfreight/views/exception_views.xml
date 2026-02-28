@@ -98,6 +98,8 @@
         <field name="res_model">stock.picking</field>
         <field name="view_mode">kanban,tree,form</field>
         <field name="domain">[('x_mf_status', 'not in', [False, 'draft'])]</field>
+        <field name="view_ids"
+               eval="[(5, 0, 0), (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_mf_pipeline_kanban')})]"/>
     </record>
 
 </odoo>
