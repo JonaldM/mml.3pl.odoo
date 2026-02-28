@@ -41,7 +41,7 @@ addons/
     │   ├── split_engine.py      # mf.split.engine — applies routing to stock.picking
     │   ├── push_cron.py         # mf.push.cron — routes orders then fires outbound queue
     │   ├── tracking_cron.py     # mf.tracking.cron — polls MF/Freightways tracking APIs (30 min)
-    │   └── inbound_cron.py      # mf.inbound.cron — polls inventory reports + reconciles stale orders (60 min)
+    │   └── inbound_cron.py      # mf.inbound.cron — dispatches SOH/ACKH/ACKL files, processes received message queue, reconciles stale orders (60 min)
     ├── document/
     │   ├── product_spec.py      # CSV builder (outbound)
     │   ├── sales_order.py       # XML builder (outbound)
@@ -76,7 +76,7 @@ The Mainfreight implementation. All Mainfreight-specific logic lives here, inclu
 | `mf.split.engine` | AbstractModel; applies routing assignments to `stock.picking` records |
 | `mf.push.cron` | AbstractModel; pre-processes routing then fires the outbound queue |
 | `mf.tracking.cron` | AbstractModel; polls MF and Freightways tracking APIs; updates picking status fields |
-| `mf.inbound.cron` | AbstractModel; polls inventory report CSV payloads; reconciles stale `mf_sent` orders |
+| `mf.inbound.cron` | AbstractModel; dispatches SOH/ACKH/ACKL CSV files to the correct handler; processes `received` message queue records (SO Confirmations, etc.); reconciles stale `mf_sent` orders |
 
 ## Key Concepts
 
@@ -131,11 +131,16 @@ Terminal statuses (`mf_delivered`, `mf_exception`) are never overwritten by the 
 
 ### Inbound Polling and Order Reconciliation
 
-`mf.inbound.cron._run_mf_inbound()` runs every 60 minutes and performs two tasks:
+`mf.inbound.cron._run_mf_inbound()` runs every 60 minutes and performs three tasks:
 
-1. **Inventory report polling**: polls each active MF connector via its transport (`poll()`), detects SFTP `(filename, content)` tuples vs REST raw strings, and calls `InventoryReportDocument.apply_csv()` for each CSV payload retrieved. Files larger than 50 MB are skipped with a warning.
+1. **CSV file dispatch** (`_poll_inventory_reports`): polls each active MF connector via its transport (`poll()`), detects SFTP `(filename, content)` tuples vs REST raw strings, and routes each file to the correct handler:
+   - Files with an `ACKH_` or `ACKL_` filename prefix, or whose CSV header contains `ClientOrderNumber`, are dispatched to `SOAcknowledgementDocument.apply_csv()` — these update the associated `stock.picking` to `mf_received`.
+   - All other CSV payloads are dispatched to `InventoryReportDocument.apply_csv()` which upserts `stock.quant` records and writes `mf.soh.discrepancy` records where drift exceeds the configured tolerance.
+   - Files larger than 50 MB are skipped with a warning.
 
-2. **Stale order reconciliation**: finds `stock.picking` records that have been in `mf_sent` status for longer than the configured threshold (default 48 hours, configurable via `ir.config_parameter` key `stock_3pl_mainfreight.reconcile_hours`) and have never received a connote. These are flagged as `mf_exception` for manual review.
+2. **Message queue processing** (`_process_inbound_messages`): scans `3pl.message` records in `received` state (created by the core `_poll_inbound` cron from XML deliveries) and dispatches each to the correct document handler by `document_type` (`so_confirmation` → `SOConfirmationDocument`, `so_acknowledgement` → `SOAcknowledgementDocument`, `inventory_report` → `InventoryReportDocument`). Success transitions the message to `applied`; unhandled exceptions dead-letter the message via `_dead_letter()` so operators are notified.
+
+3. **Stale order reconciliation** (`_reconcile_sent_orders`): finds `stock.picking` records that have been in `mf_sent` status for longer than the configured threshold (default 48 hours, configurable via `ir.config_parameter` key `stock_3pl_mainfreight.reconcile_hours`) and have never received a connote. These are flagged as `mf_exception` for manual review.
 
 ### Document Types
 
@@ -311,7 +316,7 @@ python odoo-bin -u stock_3pl_core,stock_3pl_mainfreight \
 
 The `conftest.py` at the repo root automatically marks any test class that imports from `odoo.tests` with the `odoo_integration` pytest marker, so the `-m "not odoo_integration"` filter works without decorating individual files.
 
-Sprint 1 delivered 44 pure-Python tests. Sprint 2 extended to 100 tests adding haversine, route engine, split engine, cross-border detection, and push cron coverage. Sprint 3 brought the total to **228 pure-Python tests** covering tracking cron, inbound cron, SOH cross-check, credential encryption, SFTP host key verification, and the Freightways transport adapter. 65 Odoo integration tests require `odoo-bin` and are tagged `odoo_integration`.
+Sprint 1 delivered 44 pure-Python tests. Sprint 2 extended to 100 tests adding haversine, route engine, split engine, cross-border detection, and push cron coverage. Sprint 3 brought the total to 228 tests covering tracking cron, inbound cron, SOH cross-check, credential encryption, SFTP host key verification, and the Freightways transport adapter. The inbound processing fixes (CSV type detection, ACK dispatch, received message processor) extended the suite to **312 pure-Python tests**. 65 Odoo integration tests require `odoo-bin` and are tagged `odoo_integration`.
 
 ## Development
 
@@ -361,7 +366,8 @@ No changes to `stock_3pl_core` or `stock_3pl_mainfreight` are required.
 | Sprint 1, Tasks 10–17 | `stock_3pl_mainfreight`: document builders, event triggers, transport, custom fields | Complete |
 | Sprint 2 | Warehouse routing engine (haversine, stock check, split logic), cross-border hold, operational UX (connector views, exception queues, picking status) | Complete |
 | Sprint 3 | Tracking API (MF + Freightways), SOH API cross-check, inbound polling cron, stale order reconciliation, SFTP strict host key, Fernet credential encryption, integration test suite | Complete |
-| Phase 2 | Dashboard, kanban pipeline, metrics widgets | Planned |
+| Phase 2 | KPI dashboard (OWL), kanban pipeline, exception queue, inventory discrepancy screen | Complete |
+| Inbound processing | CSV type detection (SOH vs ACKH/ACKL), ACK dispatch, received message queue processor | Complete |
 
 ## License
 
@@ -369,4 +375,4 @@ OPL-1. See individual `__manifest__.py` files for per-module licensing.
 
 ## Contributing
 
-Raise a pull request against the `feature/3pl-platform-implementation` branch. Run the pure-Python test suite (`pytest -m "not odoo_integration" -q`) before submitting.
+Raise a pull request against `master`. Run the pure-Python test suite (`pytest -m "not odoo_integration" -q`) before submitting — all 312 tests must pass.
