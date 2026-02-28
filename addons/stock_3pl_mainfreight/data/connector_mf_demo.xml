@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="connector_mf_nz_test" model="3pl.connector">
+        <field name="name">Mainfreight NZ (Test)</field>
+        <field name="forwarder">mainfreight</field>
+        <field name="transport">rest_api</field>
+        <field name="environment">test</field>
+        <field name="region">NZ</field>
+        <field name="customer_id">REPLACE_WITH_MF_CUSTOMER_ID</field>
+        <field name="warehouse_code">REPLACE_WITH_MF_WAREHOUSE_CODE</field>
+        <field name="warehouse_id" ref="stock.stock_warehouse0"/>
+        <field name="active">True</field>
+    </record>
+</odoo>

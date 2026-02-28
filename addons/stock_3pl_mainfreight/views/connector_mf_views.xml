@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_connector_mf_form" model="ir.ui.view">
+        <field name="name">3pl.connector.form.mf</field>
+        <field name="model">3pl.connector</field>
+        <field name="inherit_id" ref="stock_3pl_core.view_3pl_connector_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Mainfreight API Secrets">
+                    <group string="API Credentials">
+                        <field name="mf_warehousing_secret" password="True"/>
+                        <field name="mf_label_secret" password="True"/>
+                        <field name="mf_rating_secret" password="True"/>
+                        <field name="mf_tracking_secret" password="True"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
