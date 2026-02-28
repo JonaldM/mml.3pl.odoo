@@ -14,6 +14,7 @@
         'views/exception_views.xml',
         'views/menu_mf.xml',
         'data/tracking_cron.xml',
+        'data/inbound_cron.xml',
     ],
     'demo': ['data/connector_mf_demo.xml'],
     'installable': True,
