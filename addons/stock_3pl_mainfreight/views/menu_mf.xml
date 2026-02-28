@@ -3,8 +3,7 @@
     <!-- ── Root: 3PL Operations ─────────────────────────────────── -->
     <menuitem id="menu_3pl_ops_root"
               name="3PL Operations"
-              sequence="52"
-              web_icon="stock_3pl_mainfreight,static/description/icon.png"/>
+              sequence="52"/>
 
     <menuitem id="menu_mf_dashboard"
               name="Dashboard"
