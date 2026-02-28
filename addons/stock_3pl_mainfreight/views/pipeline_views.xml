@@ -34,7 +34,7 @@
                                 </div>
                                 <div class="o_kanban_record_body">
                                     <span class="text-muted">
-                                        <field name="picking_type_id" widget="many2one_tags"/>
+                                        <field name="picking_type_id"/>
                                     </span>
                                 </div>
                                 <div class="o_kanban_record_bottom">
