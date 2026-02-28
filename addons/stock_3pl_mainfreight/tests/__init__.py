@@ -8,3 +8,4 @@ from . import test_product_hook
 from . import test_mainfreight_rest
 from . import test_haversine
 from . import test_route_engine
+from . import test_push_cron
