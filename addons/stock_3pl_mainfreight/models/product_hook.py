@@ -18,10 +18,12 @@ class ProductProductMF(models.Model):
         result = super().write(vals)
         if SYNC_FIELDS.intersection(vals.keys()):
             for product in self:
-                product._queue_mf_product_sync(product)
+                product._queue_mf_product_sync()
         return result
 
-    def _queue_mf_product_sync(self, product):
+    def _queue_mf_product_sync(self):
+        """Queue a product_spec message for all active MF connectors for this product."""
+        self.ensure_one()
         connectors = self.env['3pl.connector'].search([
             ('forwarder', '=', 'mainfreight'),
             ('active', '=', True),
@@ -29,12 +31,12 @@ class ProductProductMF(models.Model):
         for connector in connectors:
             from odoo.addons.stock_3pl_mainfreight.document.product_spec import ProductSpecDocument
             doc = ProductSpecDocument(connector, self.env)
-            if not product.default_code:
+            if not self.default_code:
                 continue
             idempotency_key = doc.make_idempotency_key(
-                connector.id, 'product_spec', product.default_code
+                connector.id, 'product_spec', self.default_code
             )
-            # Check for existing in-flight message (queued or sending) — skip to avoid duplicates
+            # Skip if an identical message is already in-flight (queued or sending)
             in_flight = self.env['3pl.message'].search([
                 ('connector_id', '=', connector.id),
                 ('document_type', '=', 'product_spec'),
@@ -43,8 +45,8 @@ class ProductProductMF(models.Model):
             ], limit=1)
             if in_flight:
                 continue
-            payload = doc.build_outbound(product)
-            # If already sent, queue as an update; otherwise create
+            payload = doc.build_outbound(self)
+            # If product was previously sent, queue as update; otherwise create
             already_sent = self.env['3pl.message'].search([
                 ('connector_id', '=', connector.id),
                 ('document_type', '=', 'product_spec'),
@@ -59,9 +61,9 @@ class ProductProductMF(models.Model):
                 'action': action,
                 'payload_csv': payload,
                 'ref_model': 'product.product',
-                'ref_id': product.id,
+                'ref_id': self.id,
                 'idempotency_key': idempotency_key,
                 'state': 'queued',
             })
             _logger.info('MF: Queued product_spec %s (action=%s) for connector %s',
-                         product.default_code, action, connector.name)
+                         self.default_code, action, connector.name)
