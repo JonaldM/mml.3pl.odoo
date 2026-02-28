@@ -123,6 +123,7 @@
         <field name="name">Inventory Discrepancy</field>
         <field name="res_model">mf.soh.discrepancy</field>
         <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_mf_discrepancy_search"/>
         <field name="context">{'search_default_open': 1}</field>
     </record>
 

@@ -17,3 +17,4 @@ from . import test_soh_discrepancy
 from . import test_split_engine
 from . import test_reassign_wizard
 from . import test_kpi_dashboard
+from . import test_accept_discrepancy_wizard
