@@ -1,0 +1,3 @@
+LineNumber,CustomerID,CustomerName,WarehouseID,Product,ProductDescription,ProductDescription2,Grade1,Grade2,Grade3,ExpiryDate,PackingDate,ProductType,DescriptionGroup,StockOnHand,QuantityHeldByPick,QuantityOnHold,QuantityRestricted,QuantityCommitted,QuantityDamaged,QuantityAvailable,ArrivalDate
+1,123456,TEST CO,99,WIDG001,Widget,,,,,,,,GENERAL,100,0,0,0,5,0,95,20/08/2024
+2,123456,TEST CO,99,WIDG002,Widget 2,,,,,,,,GENERAL,50,0,10,0,0,0,40,20/08/2024
