@@ -1,3 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_3pl_connector_manager,3pl.connector manager,model_3pl_connector,stock.group_stock_manager,1,1,1,1
 access_3pl_connector_user,3pl.connector user,model_3pl_connector,stock.group_stock_user,1,0,0,0
+access_3pl_message_manager,3pl.message manager,model_3pl_message,stock.group_stock_manager,1,1,1,1
+access_3pl_message_user,3pl.message user,model_3pl_message,stock.group_stock_user,1,0,0,0

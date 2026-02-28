@@ -34,13 +34,13 @@ class ThreePlConnector(models.Model):
 
     # REST API credentials
     api_url = fields.Char('API URL')
-    api_secret = fields.Char('API Secret')
+    api_secret = fields.Char('API Secret', groups='stock.group_stock_manager')
 
     # SFTP credentials
     sftp_host = fields.Char('SFTP Host')
     sftp_port = fields.Integer('SFTP Port', default=22)
     sftp_username = fields.Char('SFTP Username')
-    sftp_password = fields.Char('SFTP Password')
+    sftp_password = fields.Char('SFTP Password', groups='stock.group_stock_manager')
     sftp_inbound_path = fields.Char('SFTP Inbound Path', default='/in')
     sftp_outbound_path = fields.Char('SFTP Outbound Path', default='/out')
 
