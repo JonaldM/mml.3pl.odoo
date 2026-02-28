@@ -28,16 +28,18 @@ class RestTransport(AbstractTransport):
         except requests.ConnectionError as e:
             return self._retriable_error(f'Connection error: {e}')
         except requests.exceptions.RequestException as e:
-            return self._retriable_error(f'Transport error: {e}')
+            return self._retriable_error(f'Transport error: {str(e).split(chr(10))[0][:200]}')
 
         if resp.status_code in (200, 201):
             return self._success()
         elif resp.status_code == 409:
             return self._success(note='already_exists')
         elif resp.status_code == 422:
-            return self._validation_error(resp.text)
+            error_body = resp.text[:500].replace('\n', ' ').replace('\r', '') if resp.text else ''
+            return self._validation_error(error_body)
         else:
-            return self._retriable_error(f'HTTP {resp.status_code}: {resp.text}')
+            error_body = resp.text[:500].replace('\n', ' ').replace('\r', '') if resp.text else ''
+            return self._retriable_error(f'HTTP {resp.status_code}: {error_body}')
 
     def poll(self, path=None):
         """Poll the REST endpoint for inbound payloads.

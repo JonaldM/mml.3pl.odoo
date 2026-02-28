@@ -2,9 +2,19 @@ import csv
 import io
 import logging
 from datetime import datetime
+from odoo.exceptions import ValidationError
 from odoo.addons.stock_3pl_core.models.document_base import AbstractDocument
 
 _logger = logging.getLogger(__name__)
+
+
+def _validate_ref(value, field_name, max_len=256):
+    """Validate a reference string from external data before using in ORM search."""
+    if not value or not isinstance(value, str):
+        raise ValidationError(f'Invalid {field_name}: empty or non-string value received from 3PL')
+    if len(value) > max_len:
+        raise ValidationError(f'Invalid {field_name}: value too long ({len(value)} chars, max {max_len})')
+    return value.strip()
 
 # Discrepancy threshold: differences within this range are auto-corrected.
 # Larger discrepancies are flagged for manual review (future enhancement).
@@ -54,11 +64,17 @@ class InventoryReportDocument(AbstractDocument):
         applied = 0
         skipped = 0
         for line in lines:
+            try:
+                product_code = _validate_ref(line.get('product_code'), 'product code')
+            except ValidationError as exc:
+                _logger.warning('MF SOH: skipping line — %s', exc)
+                skipped += 1
+                continue
             product = self.env['product.product'].search(
-                [('default_code', '=', line['product_code'])], limit=1
+                [('default_code', '=', product_code)], limit=1
             )
             if not product:
-                _logger.warning('MF SOH: product not found: %s', line['product_code'])
+                _logger.warning('MF SOH: product not found: %s', product_code)
                 skipped += 1
                 continue
 

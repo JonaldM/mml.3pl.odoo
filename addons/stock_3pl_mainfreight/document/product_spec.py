@@ -54,11 +54,18 @@ class ProductSpecDocument(AbstractDocument):
             writer.writerow(self._build_row(product))
         return output.getvalue()
 
+    @staticmethod
+    def _safe_csv(value):
+        """Prevent CSV formula injection by prefixing dangerous leading characters."""
+        if value and isinstance(value, str) and value[0] in ('=', '@', '+', '-', '\t', '\r'):
+            return "'" + value
+        return value or ''
+
     def _build_row(self, product):
         row = {
-            'Product Code': self.truncate(product.default_code, 40),
-            'Product Description 1': self.truncate(product.name, 40),
-            'Product Description 2': self.truncate(product.description_sale or '', 40),
+            'Product Code': self._safe_csv(self.truncate(product.default_code, 40)),
+            'Product Description 1': self._safe_csv(self.truncate(product.name, 40)),
+            'Product Description 2': self._safe_csv(self.truncate(product.description_sale or '', 40)),
             'Unit Weight': round(product.weight or 0, 4),
             'Unit Volume': round(product.volume or 0, 4),
             'Unit Price': round(product.standard_price or 0, 2),
@@ -96,16 +103,16 @@ class ProductSpecDocument(AbstractDocument):
         for i, pkg in enumerate(packagings, start=1):
             if i == 1:
                 row['Default Pack Size'] = int(pkg.qty or 1)
-                row['Default Pack Description'] = self.truncate(pkg.name, 20)
-                row['Default Barcode'] = self.truncate(pkg.barcode or '', 40)
+                row['Default Pack Description'] = self._safe_csv(self.truncate(pkg.name, 20))
+                row['Default Barcode'] = self._safe_csv(self.truncate(pkg.barcode or '', 40))
                 if hasattr(pkg, 'length'):
                     row['Default Length'] = round(pkg.length or 0, 4)
                     row['Default Width'] = round(pkg.width or 0, 4)
                     row['Default Height'] = round(pkg.height or 0, 4)
             else:
                 row[f'Pack Size {i}'] = int(pkg.qty or 1)
-                row[f'Pack Description {i}'] = self.truncate(pkg.name, 20)
-                row[f'Pack Barcode {i}'] = self.truncate(pkg.barcode or '', 40)
+                row[f'Pack Description {i}'] = self._safe_csv(self.truncate(pkg.name, 20))
+                row[f'Pack Barcode {i}'] = self._safe_csv(self.truncate(pkg.barcode or '', 40))
 
         return row
 

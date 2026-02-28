@@ -2,9 +2,19 @@
 import csv
 import io
 import logging
+from odoo.exceptions import ValidationError
 from odoo.addons.stock_3pl_core.models.document_base import AbstractDocument
 
 _logger = logging.getLogger(__name__)
+
+
+def _validate_ref(value, field_name, max_len=256):
+    """Validate a reference string from external data before using in ORM search."""
+    if not value or not isinstance(value, str):
+        raise ValidationError(f'Invalid {field_name}: empty or non-string value received from 3PL')
+    if len(value) > max_len:
+        raise ValidationError(f'Invalid {field_name}: value too long ({len(value)} chars, max {max_len})')
+    return value.strip()
 
 
 class SOAcknowledgementDocument(AbstractDocument):
@@ -38,6 +48,11 @@ class SOAcknowledgementDocument(AbstractDocument):
         for ack in rows:
             order_ref = ack.get('client_order_number')
             if not order_ref:
+                continue
+            try:
+                order_ref = _validate_ref(order_ref, 'client order number')
+            except ValidationError as exc:
+                _logger.warning('MF ACK: skipping row — %s', exc)
                 continue
             order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
             if not order:

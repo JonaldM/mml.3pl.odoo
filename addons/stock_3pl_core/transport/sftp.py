@@ -73,7 +73,7 @@ class SftpTransport(AbstractTransport):
             return self._success()
         except Exception as e:
             _logger.error('SFTP send failed: %s', e)
-            return self._retriable_error(str(e))
+            return self._retriable_error(str(e).split('\n')[0][:200])
         finally:
             if sftp:
                 sftp.close()

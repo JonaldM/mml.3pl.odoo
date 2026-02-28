@@ -2,11 +2,21 @@
 import logging
 from datetime import datetime
 from lxml import etree
+from odoo.exceptions import ValidationError
 from odoo.addons.stock_3pl_core.models.document_base import AbstractDocument
 
 _logger = logging.getLogger(__name__)
 
 _XML_PARSER = etree.XMLParser(resolve_entities=False, no_network=True)
+
+
+def _validate_ref(value, field_name, max_len=256):
+    """Validate a reference string from external data before using in ORM search."""
+    if not value or not isinstance(value, str):
+        raise ValidationError(f'Invalid {field_name}: empty or non-string value received from 3PL')
+    if len(value) > max_len:
+        raise ValidationError(f'Invalid {field_name}: value too long ({len(value)} chars, max {max_len})')
+    return value.strip()
 
 
 class SOConfirmationDocument(AbstractDocument):
@@ -41,11 +51,12 @@ class SOConfirmationDocument(AbstractDocument):
         if not message.payload_xml:
             raise ValueError(f'No XML payload on message {message.id} — cannot apply SO Confirmation')
         parsed = self.parse_inbound(message.payload_xml)
+        ref = _validate_ref(parsed.get('reference'), 'order reference')
         order = self.env['sale.order'].search(
-            [('name', '=', parsed['reference'])], limit=1
+            [('name', '=', ref)], limit=1
         )
         if not order:
-            raise ValueError(f"Sale order not found: {parsed['reference']}")
+            raise ValueError(f"Sale order not found: {ref}")
 
         picking = order.picking_ids.filtered(
             lambda p: p.state not in ('done', 'cancel')
@@ -69,16 +80,27 @@ class SOConfirmationDocument(AbstractDocument):
 
         # Match carrier by name
         if parsed['carrier_name']:
-            carrier = self.env['delivery.carrier'].search(
-                [('name', 'ilike', parsed['carrier_name'])], limit=1
-            )
-            if carrier:
-                picking.carrier_id = carrier
+            try:
+                carrier_name = _validate_ref(parsed['carrier_name'], 'carrier name')
+                carrier = self.env['delivery.carrier'].search(
+                    [('name', 'ilike', carrier_name)], limit=1
+                )
+                if carrier:
+                    picking.carrier_id = carrier
+            except ValidationError:
+                _logger.warning('MF: invalid carrier name in SO Confirmation — skipping carrier match')
 
         # Reconcile move line quantities
         for line_data in parsed['lines']:
+            if not line_data.get('product_code'):
+                continue
+            try:
+                product_code = _validate_ref(line_data['product_code'], 'product code')
+            except ValidationError:
+                _logger.warning('MF: invalid product code in SO Confirmation line — skipping line')
+                continue
             product = self.env['product.product'].search(
-                [('default_code', '=', line_data['product_code'])], limit=1
+                [('default_code', '=', product_code)], limit=1
             )
             if product:
                 move = picking.move_lines.filtered(
