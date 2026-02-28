@@ -2,3 +2,4 @@ from . import connector_mf, warehouse_mf, picking_mf, sale_order_mf, sale_order_
 from . import route_engine
 from . import split_engine
 from . import push_cron
+from . import tracking_cron

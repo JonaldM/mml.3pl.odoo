@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="cron_mf_poll_tracking" model="ir.cron">
+        <field name="name">MF: Poll Tracking Status</field>
+        <field name="model_id" ref="model_mf_tracking_cron"/>
+        <field name="state">code</field>
+        <field name="code">model._run_mf_tracking()</field>
+        <field name="interval_number">30</field>
+        <field name="interval_type">minutes</field>
+        <field name="numbercall">-1</field>
+        <field name="active">True</field>
+    </record>
+</odoo>

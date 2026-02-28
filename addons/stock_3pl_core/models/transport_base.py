@@ -20,6 +20,15 @@ class AbstractTransport(abc.ABC):
         """Poll for inbound messages. Returns list of raw payloads."""
         return []
 
+    def get_tracking_status(self, connote):
+        """Poll tracking API for a given connote number.
+
+        Returns a dict with keys: status (str|None), pod_url (str|None),
+        signed_by (str|None), delivered_at (datetime|None).
+        Default implementation returns {} — subclasses override for real tracking.
+        """
+        return {}
+
     def _success(self, note=None):
         return {'success': True, 'note': note}
 
