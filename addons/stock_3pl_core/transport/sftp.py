@@ -18,6 +18,9 @@ class SftpTransport(AbstractTransport):
     def _get_client(self):
         import paramiko
         ssh = paramiko.SSHClient()
+        # TODO(security): Replace AutoAddPolicy with RejectPolicy + pre-loaded known_hosts
+        # before deploying to production. AutoAddPolicy accepts any host key, which is
+        # acceptable for development but vulnerable to MITM in production.
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(
             hostname=self.connector.sftp_host,
@@ -70,7 +73,7 @@ class SftpTransport(AbstractTransport):
             for fname in files:
                 fpath = f'{inbound}/{fname}'
                 try:
-                    with sftp.open(fpath, 'r') as f:
+                    with sftp.open(fpath, 'rb') as f:
                         content = f.read().decode('utf-8')
                     sftp.remove(fpath)  # Delete immediately after pickup
                     results.append((fname, content))

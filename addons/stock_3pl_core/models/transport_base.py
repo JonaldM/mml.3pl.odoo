@@ -6,8 +6,15 @@ class AbstractTransport(abc.ABC):
         self.connector = connector
 
     @abc.abstractmethod
-    def send(self, payload, content_type='xml', endpoint=None):
-        """Send an outbound payload. Returns dict: {success, note, error_type}."""
+    def send(self, payload, content_type='xml', filename=None, endpoint=None):
+        """Send an outbound payload. Returns dict: {success, note, error_type}.
+
+        Args:
+            payload: str or bytes — the document to send
+            content_type: 'xml', 'json', or 'csv'
+            filename: required for SFTP transport; ignored by REST/HTTP POST
+            endpoint: override the default URL/path from the connector config
+        """
 
     def poll(self, path=None):
         """Poll for inbound messages. Returns list of raw payloads."""

@@ -14,7 +14,7 @@ CONTENT_TYPES = {
 
 class RestTransport(AbstractTransport):
 
-    def send(self, payload, content_type='xml', endpoint=None):
+    def send(self, payload, content_type='xml', filename=None, endpoint=None):
         url = endpoint or self.connector.api_url
         headers = {
             'Content-Type': CONTENT_TYPES.get(content_type, 'application/xml'),
