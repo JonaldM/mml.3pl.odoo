@@ -68,6 +68,8 @@ class InventoryReportDocument(AbstractDocument):
         _logger.info('MF SOH: applied=%d skipped=%d', applied, skipped)
 
         if report_date:
+            # Record when this report was applied (not the report's date).
+            # last_soh_applied_at is used by is_stale() to reject older reports.
             self.connector.last_soh_applied_at = datetime.now()
 
     def apply_inbound(self, message):
