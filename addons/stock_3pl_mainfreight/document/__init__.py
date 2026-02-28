@@ -1,1 +1,1 @@
-# Document builders added in later tasks (Tasks 11-13)
+from . import product_spec

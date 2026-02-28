@@ -1,1 +1,1 @@
-# Tests added in later tasks (Tasks 18-19)
+from . import test_product_spec
