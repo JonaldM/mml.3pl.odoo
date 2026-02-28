@@ -1,4 +1,14 @@
 # addons/stock_3pl_mainfreight/tests/test_haversine.py
+"""Pure-Python tests for the haversine distance utility.
+
+These tests use unittest.TestCase (not TransactionCase) because haversine_km
+has no Odoo ORM dependencies. Run with:
+    python -m pytest addons/stock_3pl_mainfreight/tests/test_haversine.py -v
+
+These tests will NOT run under odoo-bin --test-enable --test-tags=routing
+because they lack the @tagged decorator. Add the tests to your pytest run
+instead of the Odoo test runner for this module.
+"""
 import unittest
 from odoo.addons.stock_3pl_mainfreight.utils.haversine import haversine_km, sort_warehouses_by_distance
 
@@ -14,8 +24,8 @@ class TestHaversine(unittest.TestCase):
         # Hamilton NZ (-37.7870, 175.2793) → Christchurch NZ (-43.5321, 172.6362)
         # Great-circle distance is ~676 km (road distance is longer ~750 km)
         km = haversine_km(-37.7870, 175.2793, -43.5321, 172.6362)
-        self.assertGreater(km, 600)
-        self.assertLess(km, 750)
+        self.assertGreater(km, 670)
+        self.assertLess(km, 685)
 
     def test_sort_returns_closest_first(self):
         # Customer near Hamilton
@@ -45,3 +55,11 @@ class TestHaversine(unittest.TestCase):
         km = haversine_km(51.5074, -0.1278, 48.8566, 2.3522)
         self.assertGreater(km, 300)
         self.assertLess(km, 400)
+
+    def test_invalid_latitude_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            haversine_km(91, 0, 0, 0)
+
+    def test_invalid_longitude_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            haversine_km(0, 181, 0, 0)
