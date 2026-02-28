@@ -477,5 +477,67 @@ class TestApplyRoutingNonCrossBorder(unittest.TestCase):
         ))
 
 
+# ---------------------------------------------------------------------------
+# Load picking_mf module under test
+# ---------------------------------------------------------------------------
+
+_PICKING_MF_PATH = _HERE.parent / 'models' / 'picking_mf.py'
+
+if 'stock_3pl_mainfreight.models.picking_mf' not in sys.modules:
+    _picking_spec = importlib.util.spec_from_file_location(
+        'stock_3pl_mainfreight.models.picking_mf', str(_PICKING_MF_PATH)
+    )
+    _picking_mod = importlib.util.module_from_spec(_picking_spec)
+    sys.modules['stock_3pl_mainfreight.models.picking_mf'] = _picking_mod
+    _picking_spec.loader.exec_module(_picking_mod)
+else:
+    _picking_mod = sys.modules['stock_3pl_mainfreight.models.picking_mf']
+
+StockPickingMF = _picking_mod.StockPickingMF
+# Retrieve the stubbed UserError so we can assert on the correct class.
+_UserError = sys.modules['odoo.exceptions'].UserError
+
+
+# ---------------------------------------------------------------------------
+# Tests: action_approve_cross_border
+# ---------------------------------------------------------------------------
+
+class TestApproveCrossBorder(unittest.TestCase):
+    """action_approve_cross_border: validates status and advances to mf_queued."""
+
+    def test_approve_advances_to_queued(self):
+        """A picking with mf_held_review status is advanced to mf_queued."""
+        # Build a mock picking that is in the correct held status.
+        mock_picking = MagicMock()
+        mock_picking.x_mf_status = 'mf_held_review'
+        mock_picking.name = 'WH/OUT/00001'
+
+        # Build a mock 'self' recordset that iterates over [mock_picking]
+        # and has a write() method we can assert on.
+        mock_self = MagicMock()
+        mock_self.__iter__ = MagicMock(return_value=iter([mock_picking]))
+
+        # Call the method as an unbound function, passing mock_self as self.
+        StockPickingMF.action_approve_cross_border(mock_self)
+
+        # write must have been called with the queued status.
+        mock_self.write.assert_called_once_with({'x_mf_status': 'mf_queued'})
+
+    def test_approve_raises_for_wrong_status(self):
+        """A picking NOT in mf_held_review raises UserError; write is never called."""
+        mock_picking = MagicMock()
+        mock_picking.x_mf_status = 'mf_sent'
+        mock_picking.name = 'WH/OUT/00002'
+
+        mock_self = MagicMock()
+        mock_self.__iter__ = MagicMock(return_value=iter([mock_picking]))
+
+        with self.assertRaises(_UserError):
+            StockPickingMF.action_approve_cross_border(mock_self)
+
+        # write should never be reached when validation fails.
+        mock_self.write.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()

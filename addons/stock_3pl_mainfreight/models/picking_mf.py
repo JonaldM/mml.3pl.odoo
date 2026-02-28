@@ -1,5 +1,6 @@
 # addons/stock_3pl_mainfreight/models/picking_mf.py
 from odoo import models, fields
+from odoo.exceptions import UserError
 
 MF_STATUS = [
     ('draft', 'Draft'),
@@ -34,3 +35,18 @@ class StockPickingMF(models.Model):
     # Sprint 2 routing fields — declared here to avoid migration on routing engine rollout
     x_mf_routed_by = fields.Selection(MF_ROUTED_BY, 'Routing Method', readonly=True, copy=False)
     x_mf_cross_border = fields.Boolean('Cross-Border', default=False)
+
+    def action_approve_cross_border(self):
+        """Release cross-border held pickings for MF push.
+
+        Only valid from mf_held_review status. Advances to mf_queued
+        so the next push cron run will include this picking.
+        Can be called on a recordset — validates each picking individually.
+        """
+        for picking in self:
+            if picking.x_mf_status != 'mf_held_review':
+                raise UserError(
+                    f'{picking.name} is not in cross-border held status '
+                    f'(current: {picking.x_mf_status or "not set"}).'
+                )
+        self.write({'x_mf_status': 'mf_queued'})
