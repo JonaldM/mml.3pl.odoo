@@ -348,13 +348,19 @@ No changes to `stock_3pl_core` or `stock_3pl_mainfreight` are required.
 
 ## Security Notes
 
-**Credential encryption at rest:** All API secrets (`api_secret`, `sftp_password`, `mf_*_secret`, `fw_api_key`) are encrypted with Fernet symmetric encryption before being written to the database. The master key is auto-generated on first use and stored in `ir.config_parameter` under `stock_3pl_core.credential_key`. Transport adapters read credentials via `connector.get_credential(field)` which decrypts on the fly. Legacy plaintext values (written before encryption was introduced) are passed through transparently. **Note:** this protects against unprivileged SQL reads but does not protect against full database dumps — operators requiring stronger at-rest protection should use PostgreSQL full-disk encryption or a secrets manager for the master key.
+**Credential encryption at rest:** All API secrets (`api_secret`, `sftp_password`, `mf_*_secret`, `fw_api_key`) are encrypted with Fernet symmetric encryption before being written to the database. The master key is auto-generated on first use and stored in `ir.config_parameter` under `stock_3pl_core.credential_key`. Transport adapters read credentials via `connector.get_credential(field)` which decrypts on the fly. Legacy plaintext credentials are passed through with a logged warning prompting re-save. If decryption fails (e.g. after a key rotation), an empty string is returned and the error is logged — the ciphertext is never propagated to HTTP headers or external systems. **Note:** this protects against unprivileged SQL reads but does not protect against full database dumps — operators requiring stronger at-rest protection should use PostgreSQL full-disk encryption or a secrets manager for the master key.
 
 **SFTP host key verification:** Setting the `SFTP Host Key` field on a connector (paste output of `ssh-keyscan <host>`) enables strict verification via `paramiko.RejectPolicy()`. Without it, new host keys are accepted with a logged warning — acceptable for development but not for production.
 
 **XML XXE hardening:** All XML parsers use `etree.XMLParser(resolve_entities=False, no_network=True)` to prevent external entity injection.
 
-**Input validation:** All inbound 3PL data (tracking API responses, SOH API quantities, CSV inventory reports) is validated before ORM writes. Tracking status values are checked against an allowlist; POD URLs must use `https://`; SOH quantities are checked for NaN/Inf/negative/extreme values; CSV payloads over 50 MB are rejected.
+**SSRF protection:** `RestTransport` validates `api_url` before every request — URLs must use `https://` and must not resolve to RFC-1918 private ranges, link-local (`169.254.x.x`), or loopback addresses. `HttpPostTransport` URL-encodes the `transport_name` query parameter using `urllib.parse.quote` to prevent query-string injection. Both transports truncate error response bodies to 500 characters before storing in `3pl.message.last_error` to prevent large or sensitive error payloads being written to the database.
+
+**Input validation:** All inbound 3PL data (tracking API responses, SOH API quantities, CSV inventory reports) is validated before ORM writes. Tracking status values are checked against an allowlist; POD URLs must use `https://`; SOH quantities and all numeric CSV fields are parsed with overflow/NaN guards so a malformed file cannot abort processing of subsequent rows; CSV payloads over 50 MB are rejected. Carrier name lookups from inbound XML use exact match (`=`) rather than `ilike` to prevent wildcard expansion.
+
+**XSS protection:** User display names interpolated into Odoo chatter `message_post` HTML bodies are escaped with `html.escape()`.
+
+**Resource exhaustion:** Frontend-supplied numeric parameters (e.g. `weeks` in `get_weekly_trend`) are clamped server-side to prevent unbounded database query loops.
 
 **Idempotency:** `source_hash` deduplication (SHA-256) prevents replayed inbound payloads from being applied twice. All credential fields carry `password=True` and `groups='stock.group_stock_manager'`.
 
@@ -368,6 +374,7 @@ No changes to `stock_3pl_core` or `stock_3pl_mainfreight` are required.
 | Sprint 3 | Tracking API (MF + Freightways), SOH API cross-check, inbound polling cron, stale order reconciliation, SFTP strict host key, Fernet credential encryption, integration test suite | Complete |
 | Phase 2 | KPI dashboard (OWL), kanban pipeline, exception queue, inventory discrepancy screen | Complete |
 | Inbound processing | CSV type detection (SOH vs ACKH/ACKL), ACK dispatch, received message queue processor | Complete |
+| Bug hunt + security hardening | Full-codebase audit: SFTP inbound tuple unpacking (silent payload loss), Odoo 15 `move_ids` rename in split engine and SO confirmation, Freightways credential field scope fix, empty payload guard, fractional quantity rounding, `description_sale` sync field removal, SSRF URL validation, HTTP POST query-string encoding, credential store decryption safety, XML wildcard carrier lookup, CSV numeric overflow guards, XSS chatter escaping, KPI query bounds | Complete |
 
 ## License
 
@@ -376,3 +383,11 @@ OPL-1. See individual `__manifest__.py` files for per-module licensing.
 ## Contributing
 
 Raise a pull request against `master`. Run the pure-Python test suite (`pytest -m "not odoo_integration" -q`) before submitting — all 312 tests must pass.
+
+### Known Limitations
+
+- **SFTP MITM (when `sftp_host_key` is unset):** New host keys are accepted with a logged warning. Set the host key field in production.
+- **Fernet master key co-located with ciphertext:** The encryption key lives in `ir.config_parameter` in the same database as encrypted secrets. A full database dump yields both. Use OS-level or external secret management for higher assurance.
+- **`x_mf_connector_id` override is not yet wired:** The reassign-warehouse wizard writes this field, but the push cron does not yet read it to route a re-assigned picking to a different connector. Manual reassignment requires a direct re-queue.
+- **Stale order detection uses `write_date`:** `_reconcile_sent_orders` uses `write_date` as a proxy for "time since last MF send". Any unrelated field write refreshes `write_date` and resets the timer. A dedicated `x_mf_sent_date` field would be more accurate; this is tracked for a future minor release.
+- **Equatorial/meridian coordinate fallback:** Partners at exactly `latitude=0` or `longitude=0` are treated as having no geocoordinates and fall back to the first enabled warehouse. This is intentional (Odoo Float fields default to `0.0`) but may misroute addresses genuinely at the equator or prime meridian.
