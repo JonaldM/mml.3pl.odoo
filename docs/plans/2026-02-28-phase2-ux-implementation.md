@@ -6,7 +6,17 @@
 
 **Architecture:** Native Odoo 15 views (kanban/tree/form) for pipeline and queues. OWL 2 client action for the KPI dashboard stat cards and today-summary strip, using Odoo's native graph views for trends. New `mf.soh.discrepancy` model captures SOH drift from the inbound cron. All KPI targets stored in `ir.config_parameter`.
 
-**Amendment (post-design):** Discrepancy screen changed from view-only to accept-with-reason. "Accept" writes MF qty to Odoo quant (MF is the source of truth), logs who/when/reason, and accumulates as the Shrinkage KPI. Shrinkage % = sum of accepted variance units in rolling year / total inventory units × 100. Target 0.5%/year, configurable.
+**Amendment (post-design):** Discrepancy screen changed from view-only to accept-with-reason.
+
+**Amendment (post frontend-design review — HIGH fixes applied):**
+- In Flight card navigates to Order Pipeline (not Exception Queue) — bug fixed in OWL JS
+- `get_kpi_summary()` returns `data_available` flag — OWL shows "No data yet" state on fresh install
+- Amber RAG offsets are configurable via `ir.config_parameter` — not hardcoded constants
+- `action_accept_discrepancy()` raises `UserError` if reason is empty — model-layer guard
+- Accept wizard warning banner shows specific product name + odoo_qty + mf_qty
+- Shrinkage label changed from "YTD" to "12M" to match rolling window computation
+- All 4 KPI cards are clickable (DIFOT → pipeline, IRA → discrepancy, Exception → queue, Shrinkage → discrepancy filtered to accepted)
+- `action_mf_escalate()` raises `UserError` if no escalation user is configured "Accept" writes MF qty to Odoo quant (MF is the source of truth), logs who/when/reason, and accumulates as the Shrinkage KPI. Shrinkage % = sum of accepted variance units in rolling year / total inventory units × 100. Target 0.5%/year, configurable.
 
 **Tech Stack:** Odoo 15, Python 3.9+, OWL 2 (`@odoo/owl`), Odoo JS registry pattern, `ir.actions.client`, `mail.thread` on `stock.picking` (already present), `ir.config_parameter` for targets.
 
@@ -146,6 +156,8 @@ class MfSohDiscrepancy(models.Model):
         - Sets state = 'accepted' so shrinkage KPI can accumulate it.
         """
         self.ensure_one()
+        if not reason or not reason.strip():
+            raise UserError('A reason is required to accept a discrepancy as shrinkage.')
         if self.state == 'accepted':
             raise UserError(f'{self.product_id.display_name} discrepancy already accepted.')
         # Update Odoo quant to match MF
@@ -291,10 +303,14 @@ def action_mf_escalate(self):
     ICP = self.env['ir.config_parameter'].sudo()
     escalation_user_id = int(ICP.get_param(
         'stock_3pl_mainfreight.exception_escalation_user', default=0
-    ))
+    ) or 0)
+    if not escalation_user_id:
+        raise UserError(
+            'No escalation user is configured. '
+            'Go to 3PL connector settings and set the Exception Escalation User.'
+        )
     for picking in self:
-        if escalation_user_id:
-            picking.activity_schedule(
+        picking.activity_schedule(
                 'mail.mail_activity_data_todo',
                 user_id=escalation_user_id,
                 note=f'MF Exception escalated: {picking.name}',
@@ -606,6 +622,12 @@ class MfKpiDashboard(models.AbstractModel):
             'shrinkage_target': float(ICP.get_param(
                 'stock_3pl_mainfreight.kpi_shrinkage_target', '0.5'
             )),
+            'difot_amber_offset': float(ICP.get_param(
+                'stock_3pl_mainfreight.kpi_difot_amber_offset', '5'
+            )),
+            'ira_amber_offset': float(ICP.get_param(
+                'stock_3pl_mainfreight.kpi_ira_amber_offset', '3'
+            )),
             'difot_grace_days': int(ICP.get_param(
                 'stock_3pl_mainfreight.difot_grace_days', '0'
             )),
@@ -638,12 +660,12 @@ class MfKpiDashboard(models.AbstractModel):
             'difot': {
                 'value': difot_val,
                 'rag': _rag_status(difot_val, targets['difot_target'],
-                                   targets['difot_target'] - 5),
+                                   targets['difot_target'] - targets['difot_amber_offset']),
             },
             'ira': {
                 'value': ira_val,
                 'rag': _rag_status(ira_val, targets['ira_target'],
-                                   targets['ira_target'] - 3),
+                                   targets['ira_target'] - targets['ira_amber_offset']),
             },
             'exception_rate': {
                 'value': exception_rate_val,
@@ -656,6 +678,10 @@ class MfKpiDashboard(models.AbstractModel):
             'in_flight': {'value': in_flight, 'rag': 'none'},
             'today': self._compute_today_summary(now),
             'targets': targets,
+            # Prevents fresh-install all-green confusion
+            'data_available': self.env['stock.picking'].search_count([
+                ('x_mf_status', 'not in', [False, 'draft']),
+            ]) > 0,
         }
 
     @api.model
@@ -1385,8 +1411,16 @@ class MfKpiDashboard extends Component {
         this.actionService.doAction("stock_3pl_mainfreight.action_3pl_connector_config");
     }
 
+    openOrderPipeline() {
+        this.actionService.doAction("stock_3pl_mainfreight.action_mf_order_pipeline");
+    }
+
     openExceptionQueue() {
         this.actionService.doAction("stock_3pl_mainfreight.action_mf_exceptions");
+    }
+
+    openDiscrepancy() {
+        this.actionService.doAction("stock_3pl_mainfreight.action_mf_discrepancy");
     }
 }
 
@@ -1415,6 +1449,13 @@ registry.category("actions").add("mf_kpi_dashboard", MfKpiDashboard);
             <div class="alert alert-danger m-3" t-esc="state.error"/>
         </t>
 
+        <t t-elif="state.summary and !state.summary.data_available">
+            <div class="alert alert-info m-4">
+                <strong>No data yet.</strong> The 3PL integration has not processed any orders.
+                KPI metrics will appear once orders start flowing through Mainfreight.
+            </div>
+        </t>
+
         <t t-elif="state.summary">
             <t t-set="s" t-value="state.summary"/>
 
@@ -1429,8 +1470,8 @@ registry.category("actions").add("mf_kpi_dashboard", MfKpiDashboard);
             <!-- KPI cards -->
             <div class="row g-3 p-3">
 
-                <!-- DIFOT -->
-                <div class="col-sm-6 col-lg-3">
+                <!-- DIFOT — click → Order Pipeline -->
+                <div class="col-sm-6 col-lg-3" style="cursor:pointer" t-on-click="openOrderPipeline">
                     <div t-attf-class="card h-100 mf-kpi-card #{ragClass(s.difot.rag)}">
                         <div class="card-body text-center">
                             <div class="mf-kpi-value" t-esc="formatPct(s.difot.value)"/>
@@ -1442,8 +1483,8 @@ registry.category("actions").add("mf_kpi_dashboard", MfKpiDashboard);
                     </div>
                 </div>
 
-                <!-- IRA -->
-                <div class="col-sm-6 col-lg-3">
+                <!-- IRA — click → Discrepancy screen -->
+                <div class="col-sm-6 col-lg-3" style="cursor:pointer" t-on-click="openDiscrepancy">
                     <div t-attf-class="card h-100 mf-kpi-card #{ragClass(s.ira.rag)}">
                         <div class="card-body text-center">
                             <div class="mf-kpi-value" t-esc="formatPct(s.ira.value)"/>
@@ -1455,8 +1496,8 @@ registry.category("actions").add("mf_kpi_dashboard", MfKpiDashboard);
                     </div>
                 </div>
 
-                <!-- Exception Rate -->
-                <div class="col-sm-6 col-lg-3">
+                <!-- Exception Rate — click → Exception Queue -->
+                <div class="col-sm-6 col-lg-3" style="cursor:pointer" t-on-click="openExceptionQueue">
                     <div t-attf-class="card h-100 mf-kpi-card #{ragClass(s.exception_rate.rag)}">
                         <div class="card-body text-center">
                             <div class="mf-kpi-value" t-esc="formatPct(s.exception_rate.value)"/>
@@ -1468,12 +1509,12 @@ registry.category("actions").add("mf_kpi_dashboard", MfKpiDashboard);
                     </div>
                 </div>
 
-                <!-- Shrinkage -->
-                <div class="col-sm-6 col-lg-3">
+                <!-- Shrinkage — click → Discrepancy screen (accepted filter) -->
+                <div class="col-sm-6 col-lg-3" style="cursor:pointer" t-on-click="openDiscrepancy">
                     <div t-attf-class="card h-100 mf-kpi-card #{ragClass(s.shrinkage.rag)}">
                         <div class="card-body text-center">
                             <div class="mf-kpi-value" t-esc="formatPct(s.shrinkage.value)"/>
-                            <div class="mf-kpi-label">Shrinkage (YTD)</div>
+                            <div class="mf-kpi-label">Shrinkage (12M)</div>
                             <div class="mf-kpi-target text-muted small">
                                 Target: &lt;<t t-esc="s.targets.shrinkage_target"/>%/yr
                             </div>
@@ -1481,10 +1522,10 @@ registry.category("actions").add("mf_kpi_dashboard", MfKpiDashboard);
                     </div>
                 </div>
 
-                <!-- In Flight -->
+                <!-- In Flight — click → Order Pipeline -->
                 <div class="col-sm-6 col-lg-3">
                     <div t-attf-class="card h-100 mf-kpi-card mf-kpi-neutral"
-                         style="cursor:pointer" t-on-click="openExceptionQueue">
+                         style="cursor:pointer" t-on-click="openOrderPipeline">
                         <div class="card-body text-center">
                             <div class="mf-kpi-value" t-esc="formatCount(s.in_flight.value)"/>
                             <div class="mf-kpi-label">In Flight</div>
@@ -1648,6 +1689,14 @@ Replace entirely:
     <record id="param_kpi_shrinkage_target" model="ir.config_parameter">
         <field name="key">stock_3pl_mainfreight.kpi_shrinkage_target</field>
         <field name="value">0.5</field>
+    </record>
+    <record id="param_kpi_difot_amber_offset" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kpi_difot_amber_offset</field>
+        <field name="value">5</field>
+    </record>
+    <record id="param_kpi_ira_amber_offset" model="ir.config_parameter">
+        <field name="key">stock_3pl_mainfreight.kpi_ira_amber_offset</field>
+        <field name="value">3</field>
     </record>
 </odoo>
 ```
