@@ -2,3 +2,4 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_mf_soh_discrepancy_manager,mf.soh.discrepancy manager,model_mf_soh_discrepancy,stock.group_stock_manager,1,1,1,1
 access_mf_soh_discrepancy_user,mf.soh.discrepancy user,model_mf_soh_discrepancy,stock.group_stock_user,1,0,0,0
 access_mf_reassign_wizard,mf.reassign.warehouse.wizard,model_mf_reassign_warehouse_wizard,stock.group_stock_manager,1,1,1,1
+access_mf_accept_discrepancy_wizard,mf.accept.discrepancy.wizard,model_mf_accept_discrepancy_wizard,stock.group_stock_user,1,1,1,1
