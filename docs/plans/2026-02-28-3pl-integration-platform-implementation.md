@@ -40,11 +40,37 @@ python odoo-bin -u stock_3pl_core --test-enable --stop-after-init -d testdb \
 
 ---
 
+## Sprint Status (updated 2026-02-28)
+
+| Task | Description | Status | Commit |
+|------|-------------|--------|--------|
+| Task 1 | Core module scaffold | ✅ DONE | `7b7d4dc` |
+| Task 2 | `3pl.connector` model | ✅ DONE | `4c2ff1b` |
+| Task 3 | `3pl.message` + state machine | ✅ DONE | `7a1cc86` |
+| Task 4 | Idempotency constraints | ✅ DONE | `3a16cee` |
+| Task 5 | Transport base + REST adapter | ✅ DONE | `2bde1ea` |
+| Task 6 | SFTP + HTTP POST transports | ✅ DONE | `56d2876` |
+| Task 7 | Document base + FreightForwarderMixin | ✅ DONE | `bffb8ba` |
+| Task 8 | Outbound queue processor cron | ✅ DONE | `32c312f` |
+| Task 9 | Views, menus, wizard | ✅ DONE | `75b4b91` |
+| Tasks 10–19 | `stock_3pl_mainfreight` module | ⏳ NOT STARTED | Sprint interrupted |
+
+**Interrupt point:** Sprint paused after completing all `stock_3pl_core` tasks. No `addons/stock_3pl_mainfreight/` directory exists. Resume from Task 10.
+
+**V3 scope additions** (from `mainfreight_integration_scopeV3.md`) incorporated into Phase 2:
+- `mf_held_review` status added to `x_mf_status` before `mf_queued` (Task 16 — `picking_mf.py`)
+- `so_acknowledgement` document type added to `DOCUMENT_TYPE` (Task 13)
+- `warehouse_mf.py`: `x_mf_warehouse_code`, `x_mf_customer_id`, `x_mf_enabled` (Task 10)
+- `picking_mf.py`: full MF status field + tracking fields (Task 16 — new sub-task)
+- Routing fields (`x_mf_routed_by`, `x_mf_cross_border`, lat/lng) deferred to Sprint 2 — Sprint 2 plan references these files by name
+
+---
+
 ## PHASE 1 — `stock_3pl_core` Module
 
 ---
 
-### Task 1: Core module scaffold
+### Task 1: Core module scaffold [DONE]
 
 **Files:**
 - Create: `addons/stock_3pl_core/__manifest__.py`
@@ -112,7 +138,7 @@ git commit -m "feat(core): scaffold stock_3pl_core module"
 
 ---
 
-### Task 2: `3pl.connector` model
+### Task 2: `3pl.connector` model [DONE]
 
 **Files:**
 - Create: `addons/stock_3pl_core/models/connector.py`
@@ -268,7 +294,7 @@ git commit -m "feat(core): add 3pl.connector model with warehouse mapping"
 
 ---
 
-### Task 3: `3pl.message` model — fields and state machine
+### Task 3: `3pl.message` model — fields and state machine [DONE]
 
 **Files:**
 - Create: `addons/stock_3pl_core/models/message.py`
@@ -538,7 +564,7 @@ git commit -m "feat(core): add 3pl.message model with state machine and retry lo
 
 ---
 
-### Task 4: Idempotency and deduplication on `3pl.message`
+### Task 4: Idempotency and deduplication on `3pl.message` [DONE]
 
 **Files:**
 - Modify: `addons/stock_3pl_core/models/message.py`
@@ -687,7 +713,7 @@ git commit -m "feat(core): add idempotency key and source hash deduplication con
 
 ---
 
-### Task 5: Transport base class and REST transport
+### Task 5: Transport base class and REST transport [DONE]
 
 **Files:**
 - Create: `addons/stock_3pl_core/models/transport_base.py`
@@ -861,7 +887,7 @@ git commit -m "feat(core): add transport base class and REST transport adapter"
 
 ---
 
-### Task 6: SFTP and HTTP POST transports
+### Task 6: SFTP and HTTP POST transports [DONE]
 
 **Files:**
 - Create: `addons/stock_3pl_core/transport/sftp.py`
@@ -996,7 +1022,7 @@ git commit -m "feat(core): add SFTP and HTTP POST transports + connector.get_tra
 
 ---
 
-### Task 7: Document base class and `FreightForwarderMixin`
+### Task 7: Document base class and `FreightForwarderMixin` [DONE]
 
 **Files:**
 - Create: `addons/stock_3pl_core/models/document_base.py`
@@ -1072,7 +1098,7 @@ git commit -m "feat(core): add AbstractDocument base class and FreightForwarderM
 
 ---
 
-### Task 8: Outbound queue processor (scheduled action)
+### Task 8: Outbound queue processor (scheduled action) [DONE]
 
 **Files:**
 - Create: `addons/stock_3pl_core/data/cron.xml`
@@ -1222,7 +1248,7 @@ git commit -m "feat(core): add outbound queue processor cron and retry handling"
 
 ---
 
-### Task 9: Views, menus, and manual sync wizard
+### Task 9: Views, menus, and manual sync wizard [DONE]
 
 **Files:**
 - Create: `addons/stock_3pl_core/views/connector_views.xml`
@@ -1434,6 +1460,7 @@ git commit -m "feat(core): add views, menus, connector form with tabbed transpor
 - Create: `addons/stock_3pl_mainfreight/__init__.py`
 - Create: `addons/stock_3pl_mainfreight/models/__init__.py`
 - Create: `addons/stock_3pl_mainfreight/models/connector_mf.py`
+- Create: `addons/stock_3pl_mainfreight/models/warehouse_mf.py` — **V3 addition**: MF fields on `stock.warehouse`
 - Create: `addons/stock_3pl_mainfreight/document/__init__.py`
 - Create: `addons/stock_3pl_mainfreight/transport/__init__.py`
 - Create: `addons/stock_3pl_mainfreight/tests/__init__.py`
@@ -1537,11 +1564,39 @@ class ThreePlConnectorMF(models.Model):
 </odoo>
 ```
 
-**Step 4: Commit**
+**Step 4: Create `models/warehouse_mf.py`** — **V3 scope addition**
+
+```python
+# addons/stock_3pl_mainfreight/models/warehouse_mf.py
+from odoo import models, fields
+
+
+class StockWarehouseMF(models.Model):
+    _inherit = 'stock.warehouse'
+
+    x_mf_warehouse_code = fields.Char('MF Warehouse Code', help='MF warehouse identifier, e.g. "99"')
+    x_mf_customer_id = fields.Char('MF Customer ID', help='MF account customer ID, e.g. "123456"')
+    x_mf_enabled = fields.Boolean(
+        'MF-Managed Warehouse',
+        default=False,
+        help='Include this warehouse in Mainfreight routing and push logic.',
+    )
+    # Routing fields (used by Sprint 2 routing engine — declared here to avoid migrations)
+    x_mf_latitude = fields.Float('Latitude', digits=(9, 6))
+    x_mf_longitude = fields.Float('Longitude', digits=(9, 6))
+```
+
+Update `models/__init__.py`:
+
+```python
+from . import connector_mf, warehouse_mf
+```
+
+**Step 5: Commit**
 
 ```bash
 git add addons/stock_3pl_mainfreight/
-git commit -m "feat(mf): scaffold stock_3pl_mainfreight module with connector extension"
+git commit -m "feat(mf): scaffold stock_3pl_mainfreight module with connector and warehouse extensions"
 ```
 
 ---
@@ -1930,8 +1985,12 @@ git commit -m "feat(mf): add SalesOrderDocument XML builder with full SOH/SOL ma
 
 ### Task 13: SO Confirmation handler (MF → Odoo)
 
+> **V3 addition:** Also add `so_acknowledgement` to `DOCUMENT_TYPE` in `addons/stock_3pl_core/models/message.py`. The SO Acknowledgement (ACKH/ACKL) is a CSV inbound document that maps to `mf_received` status. Add this entry to the selection list: `('so_acknowledgement', 'SO Acknowledgement')`. Do this as part of implementing the confirmation handler so both ACK and CONFIRM are handled in sequence.
+
 **Files:**
 - Create: `addons/stock_3pl_mainfreight/document/so_confirmation.py`
+- Create: `addons/stock_3pl_mainfreight/document/so_acknowledgement.py` — **V3 addition**: CSV ACK handler (ACKH/ACKL → `mf_received`)
+- Modify: `addons/stock_3pl_core/models/message.py` — add `so_acknowledgement` to DOCUMENT_TYPE
 - Create: `addons/stock_3pl_mainfreight/tests/test_so_confirmation.py`
 - Create: `addons/stock_3pl_mainfreight/tests/fixtures/so_confirmation.xml`
 
@@ -2404,12 +2463,74 @@ git commit -m "feat(mf): add InwardOrderDocument XML builder [built, inactive, f
 
 ---
 
-### Task 16: Odoo event triggers — SO confirm and product sync
+### Task 16: Odoo event triggers, custom fields, and picking/SO model extensions
+
+> **V3 addition:** This task is expanded to include `picking_mf.py` (MF status field + tracking fields on `stock.picking`) and `sale_order_mf.py` (MF sent tracking fields on `sale.order`). Sprint 2 routing engine adds `x_mf_routed_by` and `x_mf_cross_border` to these same files — declaring them here avoids schema migrations.
 
 **Files:**
+- Create: `addons/stock_3pl_mainfreight/models/picking_mf.py` — **V3 addition**: MF status + tracking fields on `stock.picking`
+- Create: `addons/stock_3pl_mainfreight/models/sale_order_mf.py` — **V3 addition**: `x_mf_sent`, `x_mf_sent_date`, `x_mf_filename`, `x_mf_split` on `sale.order`
 - Create: `addons/stock_3pl_mainfreight/models/sale_order_hook.py`
 - Create: `addons/stock_3pl_mainfreight/models/product_hook.py`
 - Modify: `addons/stock_3pl_mainfreight/models/__init__.py`
+
+**Step 0 (V3): Implement `models/picking_mf.py`**
+
+```python
+# addons/stock_3pl_mainfreight/models/picking_mf.py
+from odoo import models, fields
+
+MF_STATUS = [
+    ('draft', 'Draft'),
+    ('mf_held_review', 'Held — Cross-Border Review'),  # V3: manual release required
+    ('mf_queued', 'Queued for 3PL'),
+    ('mf_sent', 'Sent to 3PL'),
+    ('mf_received', 'Received by MF'),
+    ('mf_dispatched', 'Dispatched'),
+    ('mf_in_transit', 'In Transit'),
+    ('mf_out_for_delivery', 'Out for Delivery'),
+    ('mf_delivered', 'Delivered'),
+    ('mf_exception', 'Exception'),
+]
+
+MF_ROUTED_BY = [
+    ('manual', 'Manual'),
+    ('auto_closest', 'Auto — Closest Warehouse'),
+    ('auto_split', 'Auto — Split Order'),
+]
+
+
+class StockPickingMF(models.Model):
+    _inherit = 'stock.picking'
+
+    x_mf_status = fields.Selection(MF_STATUS, 'MF Status', default='draft', index=True)
+    x_mf_connote = fields.Char('Connote No.')
+    x_mf_pick_id = fields.Char('MF Pick ID')
+    x_mf_pod_url = fields.Char('POD URL')
+    x_mf_signed_by = fields.Char('Signed By')
+    x_mf_dispatched_date = fields.Datetime('Dispatched Date')
+    x_mf_delivered_date = fields.Datetime('Delivered Date')
+    # Sprint 2 routing fields — declared here to avoid migration on routing engine rollout
+    x_mf_routed_by = fields.Selection(MF_ROUTED_BY, 'Routing Method', readonly=True)
+    x_mf_cross_border = fields.Boolean('Cross-Border', default=False)
+```
+
+**Step 0b (V3): Implement `models/sale_order_mf.py`**
+
+```python
+# addons/stock_3pl_mainfreight/models/sale_order_mf.py
+from odoo import models, fields
+
+
+class SaleOrderMFFields(models.Model):
+    _inherit = 'sale.order'
+
+    x_mf_sent = fields.Boolean('Sent to MF', default=False)
+    x_mf_sent_date = fields.Datetime('MF Sent Date')
+    x_mf_filename = fields.Char('MF XML Filename')
+    x_mf_split = fields.Boolean('Split Order', default=False,
+                                 help='Order was split across multiple MF warehouses (Sprint 2)')
+```
 
 **Step 1: Implement `models/sale_order_hook.py`**
 
@@ -2532,14 +2653,14 @@ class ProductProductMF(models.Model):
 **Step 3: Update `models/__init__.py`**
 
 ```python
-from . import connector_mf, sale_order_hook, product_hook
+from . import connector_mf, warehouse_mf, picking_mf, sale_order_mf, sale_order_hook, product_hook
 ```
 
 **Step 4: Commit**
 
 ```bash
 git add addons/stock_3pl_mainfreight/
-git commit -m "feat(mf): add SO confirm and product write triggers to queue MF messages"
+git commit -m "feat(mf): add picking/SO custom fields (V3) and SO confirm + product write triggers"
 ```
 
 ---
