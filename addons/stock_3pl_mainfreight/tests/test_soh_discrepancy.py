@@ -29,7 +29,9 @@ class TestSohDiscrepancyModel(unittest.TestCase):
 
     def test_mark_investigated_sets_fields(self):
         from odoo.addons.stock_3pl_mainfreight.models.soh_discrepancy import MfSohDiscrepancy
-        record = MagicMock(spec=MfSohDiscrepancy)
+        record = MagicMock()
+        record.state = 'open'
+        record.__iter__ = MagicMock(return_value=iter([record]))
         record.env = MagicMock()
         record.env.user.id = 42
         MfSohDiscrepancy.action_mark_investigated(record)
@@ -72,13 +74,17 @@ class TestSohDiscrepancyModel(unittest.TestCase):
         record.odoo_qty = 100.0
         record.env = MagicMock()
         record.env.user.id = 7
-        quant = MagicMock()
+        quant_mock = MagicMock()
+        quant_list = MagicMock()
+        quant_list.__bool__ = MagicMock(return_value=True)
+        quant_model = MagicMock()
+        quant_model.search.return_value = quant_list
         record.env.__getitem__ = MagicMock(side_effect=lambda k: {
-            'stock.quant': MagicMock(search=MagicMock(return_value=[quant])),
+            'stock.quant': quant_model,
         }.get(k, MagicMock()))
         MfSohDiscrepancy.action_accept_discrepancy(record, reason='Confirmed shrinkage')
-        # Quant should be updated to MF qty
-        quant.sudo.return_value.write.assert_called_once_with({'quantity': 95.0})
+        # Quant list should have sudo().write() called on it (not quant[0])
+        quant_list.sudo.return_value.write.assert_called_once_with({'quantity': 95.0})
         # Record state should be updated
         record.write.assert_called_once()
         write_vals = record.write.call_args[0][0]
@@ -105,3 +111,18 @@ class TestSohDiscrepancyModel(unittest.TestCase):
         }.get(k, MagicMock()))
         MfSohDiscrepancy.action_accept_discrepancy(record, reason='New stock found')
         quant_model.sudo.return_value.create.assert_called_once()
+
+    def test_variance_pct_both_zero(self):
+        from odoo.addons.stock_3pl_mainfreight.models.soh_discrepancy import _compute_variance_pct
+        self.assertEqual(_compute_variance_pct(odoo_qty=0.0, mf_qty=0.0), 0.0)
+
+    def test_mark_investigated_raises_if_accepted(self):
+        from odoo.addons.stock_3pl_mainfreight.models.soh_discrepancy import MfSohDiscrepancy
+        from odoo.exceptions import UserError
+        record = MagicMock()
+        record.state = 'accepted'
+        record.product_id.display_name = 'Test Product'
+        # Make iteration over self yield the record
+        record.__iter__ = MagicMock(return_value=iter([record]))
+        with self.assertRaises(UserError):
+            MfSohDiscrepancy.action_mark_investigated(record)

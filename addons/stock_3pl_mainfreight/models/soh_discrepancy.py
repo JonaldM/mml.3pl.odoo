@@ -8,9 +8,9 @@ _logger = logging.getLogger(__name__)
 
 
 def _compute_variance_pct(odoo_qty: float, mf_qty: float) -> float:
-    """Return abs variance as a percentage of odoo_qty. Returns 100.0 if odoo_qty is 0."""
+    """Return abs variance as a percentage of odoo_qty. Returns 0.0 if both are 0, 100.0 if only odoo_qty is 0."""
     if not odoo_qty:
-        return 100.0
+        return 0.0 if not mf_qty else 100.0
     return round(abs(mf_qty - odoo_qty) / odoo_qty * 100, 4)
 
 
@@ -20,7 +20,7 @@ class MfSohDiscrepancy(models.Model):
     _order = 'detected_date desc'
 
     product_id = fields.Many2one('product.product', 'Product', required=True, index=True)
-    warehouse_id = fields.Many2one('stock.warehouse', 'Warehouse', required=True)
+    warehouse_id = fields.Many2one('stock.warehouse', 'Warehouse', required=True, index=True)
     odoo_qty = fields.Float('Odoo SOH', digits=(16, 3))
     mf_qty = fields.Float('MF SOH', digits=(16, 3))
     variance_qty = fields.Float('Variance (units)', digits=(16, 3),
@@ -47,6 +47,12 @@ class MfSohDiscrepancy(models.Model):
             rec.variance_pct = _compute_variance_pct(rec.odoo_qty, rec.mf_qty)
 
     def action_mark_investigated(self):
+        for rec in self:
+            if rec.state == 'accepted':
+                raise UserError(
+                    f'{rec.product_id.display_name} discrepancy is already accepted as shrinkage '
+                    f'and cannot be reverted to investigated.'
+                )
         self.write({
             'state': 'investigated',
             'investigated_by': self.env.user.id,
@@ -75,7 +81,7 @@ class MfSohDiscrepancy(models.Model):
             ('location_id', '=', stock_location.id),
         ], limit=1)
         if quants:
-            quants[0].sudo().write({'quantity': self.mf_qty})
+            quants.sudo().write({'quantity': self.mf_qty})
         else:
             self.env['stock.quant'].sudo().create({
                 'product_id': self.product_id.id,
@@ -88,3 +94,8 @@ class MfSohDiscrepancy(models.Model):
             'accepted_date': fields.Datetime.now(),
             'accept_reason': reason.strip(),
         })
+        _logger.info(
+            'SOH discrepancy accepted: product=%s warehouse=%s odoo_qty=%s -> mf_qty=%s by user=%s',
+            self.product_id.display_name, self.warehouse_id.name,
+            self.odoo_qty, self.mf_qty, self.env.user.name,
+        )
