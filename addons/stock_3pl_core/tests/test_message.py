@@ -42,8 +42,10 @@ class TestMessage(TransactionCase):
         self.assertEqual(msg.state, 'sending')
         msg.action_sent()
         self.assertEqual(msg.state, 'sent')
+        self.assertTrue(msg.sent_at)
         msg.action_acknowledged()
         self.assertEqual(msg.state, 'acknowledged')
+        self.assertTrue(msg.acked_at)
 
     def test_message_fail_and_retry(self):
         msg = self.env['3pl.message'].create({
@@ -71,6 +73,22 @@ class TestMessage(TransactionCase):
         msg.action_sending()
         msg.action_fail('Final failure')
         self.assertEqual(msg.state, 'dead')
+        self.assertEqual(msg.last_error, 'Final failure')
+
+    def test_action_requeue_resets_retry_state(self):
+        msg = self.env['3pl.message'].create({
+            'connector_id': self.connector.id,
+            'direction': 'outbound',
+            'document_type': 'sales_order',
+            'action': 'create',
+            'state': 'dead',
+            'retry_count': 3,
+            'last_error': 'previous error',
+        })
+        msg.action_requeue()
+        self.assertEqual(msg.state, 'queued')
+        self.assertEqual(msg.retry_count, 0)
+        self.assertFalse(msg.last_error)
 
     def test_validation_error_goes_straight_to_dead(self):
         msg = self.env['3pl.message'].create({

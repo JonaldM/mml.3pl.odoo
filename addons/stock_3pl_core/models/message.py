@@ -92,9 +92,13 @@ class ThreePlMessage(models.Model):
     def action_fail(self, error_msg):
         """Retry if under MAX_RETRIES, otherwise dead-letter."""
         for msg in self:
-            if msg.retry_count >= MAX_RETRIES - 1:
+            if msg.retry_count + 1 >= MAX_RETRIES:
                 msg._dead_letter(error_msg)
             else:
+                _logger.warning(
+                    '3PL message %s retry %s/%s: %s',
+                    msg.id, msg.retry_count + 1, MAX_RETRIES, error_msg,
+                )
                 msg.write({
                     'state': 'queued',
                     'retry_count': msg.retry_count + 1,
@@ -111,6 +115,7 @@ class ThreePlMessage(models.Model):
         self.write({'state': 'queued', 'retry_count': 0, 'last_error': False})
 
     def _dead_letter(self, error_msg):
+        self.ensure_one()
         self.write({'state': 'dead', 'last_error': error_msg})
         if self.connector_id.notify_user_id:
             self.activity_schedule(
