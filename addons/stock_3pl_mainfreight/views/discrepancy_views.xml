@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_mf_discrepancy_tree" model="ir.ui.view">
+        <field name="name">mf.soh.discrepancy.tree</field>
+        <field name="model">mf.soh.discrepancy</field>
+        <field name="arch" type="xml">
+            <tree string="Inventory Discrepancies"
+                  decoration-danger="variance_pct &gt; 5"
+                  decoration-warning="variance_pct &gt; 1 and variance_pct &lt;= 5">
+                <field name="product_id"/>
+                <field name="warehouse_id"/>
+                <field name="odoo_qty" string="Odoo SOH"/>
+                <field name="mf_qty" string="MF SOH"/>
+                <field name="variance_qty" string="Variance (units)"/>
+                <field name="variance_pct" string="Variance %" widget="percentage"/>
+                <field name="detected_date" string="Detected"/>
+                <field name="state"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Accept discrepancy wizard form -->
+    <record id="view_mf_accept_discrepancy_wizard_form" model="ir.ui.view">
+        <field name="name">mf.accept.discrepancy.wizard.form</field>
+        <field name="model">mf.accept.discrepancy.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Accept as Shrinkage">
+                <group>
+                    <field name="discrepancy_id" readonly="1"/>
+                    <field name="variance_qty" readonly="1" string="Units to Accept"/>
+                    <field name="variance_pct" readonly="1" string="Variance %"/>
+                    <field name="reason" required="1"
+                           placeholder="e.g. Stock count confirmed, accepted as shrinkage"/>
+                </group>
+                <div class="alert alert-warning" role="alert">
+                    This will update the Odoo stock quantity to match MF.
+                    The accepted variance will be recorded against the Shrinkage KPI.
+                </div>
+                <footer>
+                    <button name="action_accept" type="object"
+                            string="Accept as Shrinkage" class="btn-warning"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mf_accept_discrepancy_wizard" model="ir.actions.act_window">
+        <field name="name">Accept as Shrinkage</field>
+        <field name="res_model">mf.accept.discrepancy.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{'default_discrepancy_id': active_id}</field>
+    </record>
+
+    <record id="view_mf_discrepancy_form" model="ir.ui.view">
+        <field name="name">mf.soh.discrepancy.form</field>
+        <field name="model">mf.soh.discrepancy</field>
+        <field name="arch" type="xml">
+            <form string="SOH Discrepancy">
+                <header>
+                    <button name="action_mark_investigated"
+                            string="Mark Investigated"
+                            type="object"
+                            attrs="{'invisible': [('state', '!=', 'open')]}"/>
+                    <button name="%(action_mf_accept_discrepancy_wizard)d"
+                            string="Accept as Shrinkage"
+                            type="action"
+                            class="btn-warning"
+                            attrs="{'invisible': [('state', '=', 'accepted')]}"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="open,investigated,accepted"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Product">
+                            <field name="product_id" readonly="1"/>
+                            <field name="warehouse_id" readonly="1"/>
+                        </group>
+                        <group string="Quantities">
+                            <field name="odoo_qty" readonly="1"/>
+                            <field name="mf_qty" readonly="1"/>
+                            <field name="variance_qty" readonly="1"/>
+                            <field name="variance_pct" readonly="1" widget="percentage"/>
+                        </group>
+                    </group>
+                    <group string="Investigation">
+                        <field name="detected_date" readonly="1"/>
+                        <field name="investigated_by" readonly="1"/>
+                        <field name="investigated_date" readonly="1"/>
+                    </group>
+                    <group string="Acceptance"
+                           attrs="{'invisible': [('state', '!=', 'accepted')]}">
+                        <field name="accepted_by" readonly="1"/>
+                        <field name="accepted_date" readonly="1"/>
+                        <field name="accept_reason" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_mf_discrepancy_search" model="ir.ui.view">
+        <field name="name">mf.soh.discrepancy.search</field>
+        <field name="model">mf.soh.discrepancy</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_id"/>
+                <field name="warehouse_id"/>
+                <filter string="Open" name="open" domain="[('state','=','open')]"/>
+                <filter string="Investigated" name="investigated"
+                        domain="[('state','=','investigated')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Warehouse" name="by_warehouse"
+                            context="{'group_by': 'warehouse_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_mf_discrepancy" model="ir.actions.act_window">
+        <field name="name">Inventory Discrepancy</field>
+        <field name="res_model">mf.soh.discrepancy</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_open': 1}</field>
+    </record>
+
+</odoo>

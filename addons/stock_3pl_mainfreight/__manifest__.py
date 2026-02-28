@@ -13,6 +13,7 @@
         'views/warehouse_mf_views.xml',
         'views/pipeline_views.xml',
         'views/exception_views.xml',
+        'views/discrepancy_views.xml',
         'views/menu_mf.xml',
         'data/tracking_cron.xml',
         'data/inbound_cron.xml',
