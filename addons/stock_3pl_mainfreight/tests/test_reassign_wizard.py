@@ -112,7 +112,6 @@ class TestReassignWizard(unittest.TestCase):
     def test_action_reassign_writes_connector_id(self):
         """Wizard must persist the chosen connector on the picking."""
         from odoo.addons.stock_3pl_mainfreight.wizard.reassign_warehouse_wizard import MfReassignWarehouseWizard
-        from odoo.addons.stock_3pl_mainfreight.models.picking_mf import StockPickingMF
         wizard = MagicMock(spec=MfReassignWarehouseWizard)
         wizard.picking_id = MagicMock()
         wizard.picking_id.x_mf_status = 'mf_exception'
