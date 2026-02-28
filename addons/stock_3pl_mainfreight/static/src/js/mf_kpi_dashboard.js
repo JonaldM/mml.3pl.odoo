@@ -2,7 +2,7 @@
 // addons/stock_3pl_mainfreight/static/src/js/mf_kpi_dashboard.js
 
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart, onWillUnmount } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillUnmount } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 
 const RAG_CLASSES = {
@@ -27,6 +27,9 @@ class MfKpiDashboard extends Component {
 
         onWillStart(async () => {
             await this._loadData();
+        });
+
+        onMounted(() => {
             // Auto-refresh every 5 minutes
             this._refreshInterval = setInterval(() => this._loadData(), 5 * 60 * 1000);
         });
@@ -64,7 +67,7 @@ class MfKpiDashboard extends Component {
     openEditTargets() {
         // KPI targets are ir.config_parameter values; the connector settings form
         // contains the target configuration fields per the Phase 2 UX design spec.
-        this.actionService.doAction("stock_3pl_mainfreight.action_3pl_connector_config");
+        this.actionService.doAction("stock_3pl_core.action_3pl_connector");
     }
 
     openOrderPipeline() {
