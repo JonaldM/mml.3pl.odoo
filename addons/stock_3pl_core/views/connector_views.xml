@@ -38,6 +38,7 @@
                     <group>
                         <group string="General">
                             <field name="active"/>
+                            <field name="priority"/>
                             <field name="warehouse_id"/>
                             <field name="warehouse_partner"/>
                             <field name="transport"/>
@@ -91,6 +92,7 @@
                         <page string="Settings">
                             <group>
                                 <field name="notify_user_id"/>
+                                <field name="product_category_ids" widget="many2many_tags"/>
                                 <field name="last_soh_applied_at"/>
                             </group>
                         </page>
@@ -114,6 +116,7 @@
                 <field name="transport"/>
                 <field name="environment"/>
                 <field name="active"/>
+                <field name="priority"/>
             </tree>
         </field>
     </record>

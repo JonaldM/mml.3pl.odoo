@@ -21,16 +21,29 @@ ENVIRONMENT_SELECTION = [
 class ThreePlConnector(models.Model):
     _name = '3pl.connector'
     _description = '3PL Warehouse Connector'
+    _order = 'priority asc, name asc'
 
     _CREDENTIAL_FIELDS = ('api_secret', 'sftp_password')
 
     name = fields.Char(required=True)
     active = fields.Boolean(default=True)
+    priority = fields.Integer(
+        'Routing Priority', default=10,
+        help='Lower number = higher priority when multiple connectors match the same warehouse. '
+             'Use this to prefer one provider over another.',
+    )
     warehouse_id = fields.Many2one('stock.warehouse', required=True, ondelete='restrict')
     warehouse_partner = fields.Selection(WAREHOUSE_PARTNER_SELECTION, string='Warehouse Partner', required=True)
     transport = fields.Selection(TRANSPORT_SELECTION, required=True)
     environment = fields.Selection(ENVIRONMENT_SELECTION, required=True, default='test')
     region = fields.Char(help='e.g. NZ, AU, US — used for international routing')
+    product_category_ids = fields.Many2many(
+        'product.category',
+        string='Handled Categories',
+        help='Product categories this connector handles inward orders for. '
+             'Leave empty to act as a catch-all (matches any goods). '
+             'Use this to route ambient goods to one 3PL and chilled/frozen goods to another.',
+    )
 
     # 3PL identity
     customer_id = fields.Char('Customer ID', help='Unique ID assigned by the 3PL')
