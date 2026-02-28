@@ -78,3 +78,15 @@ class TestRestTransport(TransactionCase):
         transport = self._make_transport()
         results = transport.poll()
         self.assertEqual(results, ['<response/>'])
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.get')
+    def test_poll_request_exception_returns_empty(self, mock_get):
+        mock_get.side_effect = requests.exceptions.RequestException('timeout')
+        transport = self._make_transport()
+        self.assertEqual(transport.poll(), [])
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.get')
+    def test_poll_non_200_returns_empty(self, mock_get):
+        mock_get.return_value = MagicMock(status_code=404, text='Not Found')
+        transport = self._make_transport()
+        self.assertEqual(transport.poll(), [])
