@@ -7,6 +7,7 @@ import sys
 import types
 import pathlib
 import importlib.util
+import pytest
 
 # Ensure the addons directory is on sys.path so direct imports work
 _ROOT = pathlib.Path(__file__).parent
@@ -203,3 +204,14 @@ def _install_odoo_stubs():
 
 
 _install_odoo_stubs()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-mark TransactionCase tests as odoo_integration (requires odoo-bin)."""
+    from odoo.tests import TransactionCase  # already stubbed in sys.modules by _install_odoo_stubs()
+    for item in items:
+        if isinstance(item, pytest.Class):
+            continue
+        cls = getattr(item, 'cls', None)
+        if cls is not None and issubclass(cls, TransactionCase):
+            item.add_marker(pytest.mark.odoo_integration)
