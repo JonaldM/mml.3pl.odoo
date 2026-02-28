@@ -148,13 +148,23 @@ class MfKpiDashboard(models.AbstractModel):
 
     # ---- private helpers ----
 
+    @api.model
     def _compute_data_available(self) -> bool:
         """Return True if any MF-tracked pickings exist (prevents all-green on fresh install)."""
         return self.env['stock.picking'].search_count([
             ('x_mf_status', 'not in', [False, 'draft']),
         ]) > 0
 
+    @api.model
     def _compute_difot_value(self, since, grace_days: int) -> float:
+        """DIFOT % for delivered orders since `since`.
+
+        On time = delivered before/on deadline + grace_days (if deadline set).
+        Orders with no deadline are always counted as on time.
+
+        Uses raw SQL for the field-to-field date comparison (Odoo ORM cannot
+        compare two record fields in a search domain).
+        """
         Picking = self.env['stock.picking']
         total = Picking.search_count([
             ('x_mf_status', '=', 'mf_delivered'),
@@ -162,37 +172,60 @@ class MfKpiDashboard(models.AbstractModel):
         ])
         if not total:
             return 100.0
-        # Count pickings with no deadline (always on time)
+
+        # Pickings with no deadline always count as on time
         no_deadline = Picking.search_count([
             ('x_mf_status', '=', 'mf_delivered'),
             ('x_mf_delivered_date', '>=', since),
             ('date_deadline', '=', False),
         ])
-        # Count pickings delivered on or before their deadline
-        # Odoo search can compare two date fields using the ORM domain
-        with_deadline_on_time = Picking.search_count([
-            ('x_mf_status', '=', 'mf_delivered'),
-            ('x_mf_delivered_date', '>=', since),
-            ('date_deadline', '!=', False),
-            ('x_mf_delivered_date', '<=', 'date_deadline'),
-        ])
+
+        # Pickings with deadline: use raw SQL for field-to-field comparison
+        self.env.cr.execute("""
+            SELECT COUNT(*)
+            FROM stock_picking
+            WHERE x_mf_status = 'mf_delivered'
+              AND x_mf_delivered_date >= %s
+              AND date_deadline IS NOT NULL
+              AND x_mf_delivered_date <= date_deadline + (INTERVAL '1 day' * %s)
+        """, [since, grace_days])
+        with_deadline_on_time = self.env.cr.fetchone()[0]
+
         return _compute_difot(no_deadline + with_deadline_on_time, total)
 
+    @api.model
     def _compute_ira_value(self, since, tolerance: float) -> float:
-        total_skus = self.env['stock.quant'].search_count([
-            ('location_id.usage', '=', 'internal'),
-            ('quantity', '>', 0),
-        ])
+        """IRA % = (tracked SKUs - SKUs with open discrepancy) / tracked SKUs × 100.
+
+        Denominator: distinct products with any internal quant quantity > 0.
+        Numerator deduction: distinct products with an open discrepancy exceeding tolerance.
+        """
+        # Count distinct products tracked in internal stock
+        quant_groups = self.env['stock.quant'].read_group(
+            [('location_id.usage', '=', 'internal'), ('quantity', '>', 0)],
+            ['product_id'],
+            ['product_id'],
+        )
+        total_skus = len(quant_groups)
         if not total_skus:
             return 100.0
-        skus_with_discrepancy = self.env['mf.soh.discrepancy'].search_count([
-            ('state', '=', 'open'),
-            ('detected_date', '>=', since),
-            ('variance_pct', '>', tolerance * 100),
-        ])
+
+        # Count distinct products with an open discrepancy exceeding tolerance
+        discrepancy_groups = self.env['mf.soh.discrepancy'].read_group(
+            [
+                ('state', '=', 'open'),
+                ('detected_date', '>=', since),
+                ('variance_pct', '>', tolerance * 100),
+            ],
+            ['product_id'],
+            ['product_id'],
+        )
+        skus_with_discrepancy = len(discrepancy_groups)
+
         ira = ((total_skus - skus_with_discrepancy) / total_skus) * 100
         return round(max(ira, 0.0), 2)
 
+    @api.model
     def _compute_exception_and_inflight(self, since):
         Picking = self.env['stock.picking']
         total = Picking.search_count([
@@ -208,25 +241,34 @@ class MfKpiDashboard(models.AbstractModel):
         ])
         return _compute_exception_rate(total, exceptions), in_flight
 
+    @api.model
     def _compute_shrinkage_value(self) -> float:
-        """Shrinkage % = accepted loss variance (rolling 12M) / total inventory units x 100.
+        """Shrinkage % = accepted loss variance (rolling 12M) / total inventory units × 100.
 
-        Only counts 'accepted' discrepancies where MF qty < Odoo qty (stock lost).
+        Only counts 'accepted' discrepancies where variance_qty < 0 (MF qty < Odoo qty = stock lost).
         """
         one_year_ago = fields.Datetime.now() - timedelta(days=365)
-        accepted = self.env['mf.soh.discrepancy'].search([
-            ('state', '=', 'accepted'),
-            ('accepted_date', '>=', one_year_ago),
-            ('variance_qty', '<', 0),  # loss: MF qty < Odoo qty
-        ])
-        total_lost = sum(abs(r.variance_qty) for r in accepted)
-        quants = self.env['stock.quant'].search([
-            ('location_id.usage', '=', 'internal'),
-            ('quantity', '>', 0),
-        ])
-        total_stock = sum(q.quantity for q in quants) or 1.0
-        return round(total_lost / total_stock * 100, 3)
 
+        # Sum accepted losses in the rolling 12M window
+        self.env.cr.execute("""
+            SELECT COALESCE(SUM(ABS(variance_qty)), 0)
+            FROM mf_soh_discrepancy
+            WHERE state = 'accepted'
+              AND accepted_date >= %s
+              AND variance_qty < 0
+        """, [one_year_ago])
+        total_lost = self.env.cr.fetchone()[0]
+
+        # Total inventory from internal locations
+        result = self.env['stock.quant'].read_group(
+            [('location_id.usage', '=', 'internal'), ('quantity', '>', 0)],
+            ['quantity'],
+            [],
+        )
+        total_stock = float(result[0]['quantity']) if result and result[0]['quantity'] else 1.0
+        return round(float(total_lost) / total_stock * 100, 3)
+
+    @api.model
     def _compute_today_summary(self, now) -> dict:
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         Picking = self.env['stock.picking']

@@ -7,7 +7,7 @@ They require the project root on PYTHONPATH so that Odoo addons are importable
 calling class methods on MagicMock instances.
 """
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from datetime import datetime, timedelta
 
 
@@ -183,3 +183,193 @@ class TestKpiDashboardModel(unittest.TestCase):
         dashboard._compute_data_available = MagicMock(return_value=False)
         result = MfKpiDashboard.get_kpi_summary(dashboard)
         self.assertFalse(result['data_available'])
+
+
+class TestDifotSqlPath(unittest.TestCase):
+    """Test _compute_difot_value SQL branch for field-to-field date comparison."""
+
+    def _make_dashboard(self, total, no_deadline, sql_on_time):
+        """Return a dashboard mock with env wired for _compute_difot_value."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = MagicMock(spec=MfKpiDashboard)
+        env = MagicMock()
+
+        picking_mock = MagicMock()
+        # search_count returns: total on first call, no_deadline on second call
+        picking_mock.search_count = MagicMock(side_effect=[total, no_deadline])
+        env.__getitem__ = MagicMock(side_effect=lambda key: {
+            'stock.picking': picking_mock,
+        }.get(key, MagicMock()))
+
+        # Cursor mock
+        cr = MagicMock()
+        cr.fetchone.return_value = (sql_on_time,)
+        env.cr = cr
+
+        dashboard.env = env
+        return dashboard
+
+    def test_no_delivered_returns_100(self):
+        """When total is 0, return 100.0 without hitting SQL."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = MagicMock(spec=MfKpiDashboard)
+        env = MagicMock()
+        picking_mock = MagicMock()
+        picking_mock.search_count.return_value = 0
+        env.__getitem__ = MagicMock(return_value=picking_mock)
+        dashboard.env = env
+        since = datetime(2026, 1, 1)
+        result = MfKpiDashboard._compute_difot_value(dashboard, since, 0)
+        self.assertEqual(result, 100.0)
+        # SQL must not be called when there are no delivered orders
+        env.cr.execute.assert_not_called()
+
+    def test_all_on_time_with_no_deadline(self):
+        """All delivered with no deadline → 100% DIFOT."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = self._make_dashboard(total=10, no_deadline=10, sql_on_time=0)
+        since = datetime(2026, 1, 1)
+        result = MfKpiDashboard._compute_difot_value(dashboard, since, 0)
+        self.assertEqual(result, 100.0)
+
+    def test_partial_on_time_via_sql(self):
+        """Mixed: 5 no-deadline + 3 sql on-time out of 10 total → 80%."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = self._make_dashboard(total=10, no_deadline=5, sql_on_time=3)
+        since = datetime(2026, 1, 1)
+        result = MfKpiDashboard._compute_difot_value(dashboard, since, 0)
+        self.assertAlmostEqual(result, 80.0)
+
+    def test_grace_days_passed_to_sql(self):
+        """grace_days value is forwarded to the SQL execute call."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        since = datetime(2026, 1, 1)
+        dashboard = self._make_dashboard(total=5, no_deadline=0, sql_on_time=5)
+        MfKpiDashboard._compute_difot_value(dashboard, since, grace_days=2)
+        # Verify that the execute call was made and grace_days=2 was in the params
+        call_args = dashboard.env.cr.execute.call_args
+        self.assertIsNotNone(call_args)
+        params = call_args[0][1]  # positional args: (sql, params)
+        self.assertIn(2, params)
+
+
+class TestShrinkageSqlPath(unittest.TestCase):
+    """Test _compute_shrinkage_value SQL + read_group path."""
+
+    def _make_dashboard(self, sql_total_lost, quant_read_group_result):
+        """Return a dashboard mock with env wired for _compute_shrinkage_value."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = MagicMock(spec=MfKpiDashboard)
+        env = MagicMock()
+
+        quant_mock = MagicMock()
+        quant_mock.read_group.return_value = quant_read_group_result
+        env.__getitem__ = MagicMock(side_effect=lambda key: {
+            'stock.quant': quant_mock,
+        }.get(key, MagicMock()))
+
+        cr = MagicMock()
+        cr.fetchone.return_value = (sql_total_lost,)
+        env.cr = cr
+
+        dashboard.env = env
+        return dashboard
+
+    def test_no_stock_returns_zero(self):
+        """When total_stock is 0 (empty read_group), denominator defaults to 1.0 → not division error."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = self._make_dashboard(sql_total_lost=0, quant_read_group_result=[])
+        result = MfKpiDashboard._compute_shrinkage_value(dashboard)
+        self.assertEqual(result, 0.0)
+
+    def test_shrinkage_calculation(self):
+        """50 units lost out of 1000 in stock → 5.0% shrinkage."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = self._make_dashboard(
+            sql_total_lost=50,
+            quant_read_group_result=[{'quantity': 1000}],
+        )
+        result = MfKpiDashboard._compute_shrinkage_value(dashboard)
+        self.assertAlmostEqual(result, 5.0)
+
+    def test_sql_execute_called_once(self):
+        """SQL execute is called exactly once for the loss sum."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = self._make_dashboard(
+            sql_total_lost=10,
+            quant_read_group_result=[{'quantity': 500}],
+        )
+        MfKpiDashboard._compute_shrinkage_value(dashboard)
+        dashboard.env.cr.execute.assert_called_once()
+
+
+class TestIraDistinctProducts(unittest.TestCase):
+    """Test _compute_ira_value uses read_group for distinct-product counting."""
+
+    def _make_dashboard(self, quant_groups, discrepancy_groups):
+        """Return a dashboard mock wired for _compute_ira_value."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = MagicMock(spec=MfKpiDashboard)
+        env = MagicMock()
+
+        quant_mock = MagicMock()
+        quant_mock.read_group.return_value = quant_groups
+        discrepancy_mock = MagicMock()
+        discrepancy_mock.read_group.return_value = discrepancy_groups
+        env.__getitem__ = MagicMock(side_effect=lambda key: {
+            'stock.quant': quant_mock,
+            'mf.soh.discrepancy': discrepancy_mock,
+        }.get(key, MagicMock()))
+
+        dashboard.env = env
+        return dashboard
+
+    def test_no_stock_returns_100(self):
+        """No tracked stock → IRA is 100.0 (nothing to be wrong about)."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        dashboard = self._make_dashboard(quant_groups=[], discrepancy_groups=[])
+        since = datetime(2026, 1, 1)
+        result = MfKpiDashboard._compute_ira_value(dashboard, since, 0.005)
+        self.assertEqual(result, 100.0)
+
+    def test_no_discrepancies_returns_100(self):
+        """10 distinct SKUs tracked, 0 discrepancies → 100.0%."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        quant_groups = [{'product_id': (i, f'P{i}'), 'product_id_count': 1} for i in range(10)]
+        dashboard = self._make_dashboard(quant_groups=quant_groups, discrepancy_groups=[])
+        since = datetime(2026, 1, 1)
+        result = MfKpiDashboard._compute_ira_value(dashboard, since, 0.005)
+        self.assertAlmostEqual(result, 100.0)
+
+    def test_distinct_product_ira_calculation(self):
+        """10 distinct SKUs, 2 with open discrepancy → 80.0%."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        quant_groups = [{'product_id': (i, f'P{i}'), 'product_id_count': 1} for i in range(10)]
+        discrepancy_groups = [
+            {'product_id': (1, 'P1'), 'product_id_count': 1},
+            {'product_id': (2, 'P2'), 'product_id_count': 1},
+        ]
+        dashboard = self._make_dashboard(
+            quant_groups=quant_groups,
+            discrepancy_groups=discrepancy_groups,
+        )
+        since = datetime(2026, 1, 1)
+        result = MfKpiDashboard._compute_ira_value(dashboard, since, 0.005)
+        self.assertAlmostEqual(result, 80.0)
+
+    def test_ira_clamped_at_zero(self):
+        """More discrepancies than SKUs (edge case) → clamped to 0.0, not negative."""
+        from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
+        quant_groups = [{'product_id': (1, 'P1'), 'product_id_count': 1}]
+        discrepancy_groups = [
+            {'product_id': (1, 'P1'), 'product_id_count': 1},
+            {'product_id': (2, 'P2'), 'product_id_count': 1},
+            {'product_id': (3, 'P3'), 'product_id_count': 1},
+        ]
+        dashboard = self._make_dashboard(
+            quant_groups=quant_groups,
+            discrepancy_groups=discrepancy_groups,
+        )
+        since = datetime(2026, 1, 1)
+        result = MfKpiDashboard._compute_ira_value(dashboard, since, 0.005)
+        self.assertEqual(result, 0.0)
