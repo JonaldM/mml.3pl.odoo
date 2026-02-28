@@ -76,7 +76,7 @@ class SftpTransport(AbstractTransport):
             hostname=self.connector.sftp_host,
             port=self.connector.sftp_port or 22,
             username=self.connector.sftp_username,
-            password=self.connector.sftp_password,
+            password=self.connector.get_credential('sftp_password'),
             timeout=30,
         )
         return ssh.open_sftp(), ssh

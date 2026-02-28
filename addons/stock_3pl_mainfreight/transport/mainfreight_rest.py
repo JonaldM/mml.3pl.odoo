@@ -57,7 +57,7 @@ class MainfreightRestTransport(RestTransport):
         Returns a dict with keys: status, pod_url, signed_by, delivered_at.
         Returns {} on any error or if the MF status string is not recognised.
         """
-        secret = self.connector.mf_tracking_secret or ''
+        secret = self.connector.get_credential('mf_tracking_secret') or ''
         url = f'{self._get_tracking_base_url()}/Tracking/{connote}'
         try:
             response = requests.get(

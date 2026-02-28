@@ -185,6 +185,7 @@ def _install_odoo_stubs():
     for pkg_name, real_path in (
         ('odoo.addons.stock_3pl_core', _core),
         ('odoo.addons.stock_3pl_core.models', _core / 'models'),
+        ('odoo.addons.stock_3pl_core.utils', _core / 'utils'),
         ('odoo.addons.stock_3pl_mainfreight', _mf),
         ('odoo.addons.stock_3pl_mainfreight.document', _mf / 'document'),
         ('odoo.addons.stock_3pl_mainfreight.models', _mf / 'models'),

@@ -1,4 +1,5 @@
 from odoo import models, fields
+from odoo.addons.stock_3pl_core.utils.credential_store import encrypt_credential
 
 MF_ENVIRONMENTS = {
     'test': {
@@ -17,11 +18,24 @@ MF_ENVIRONMENTS = {
 class ThreePlConnectorMF(models.Model):
     _inherit = '3pl.connector'
 
+    _MF_CREDENTIAL_FIELDS = (
+        'mf_warehousing_secret',
+        'mf_label_secret',
+        'mf_rating_secret',
+        'mf_tracking_secret',
+    )
+
     # MF REST API secrets (separate per API type per MF spec)
     mf_warehousing_secret = fields.Char('Warehousing API Secret', password=True, groups='stock.group_stock_manager')
     mf_label_secret = fields.Char('Label API Secret', password=True, groups='stock.group_stock_manager')
     mf_rating_secret = fields.Char('Rating API Secret', password=True, groups='stock.group_stock_manager')
     mf_tracking_secret = fields.Char('Tracking API Secret', password=True, groups='stock.group_stock_manager')
+
+    def write(self, vals):
+        for field in self._MF_CREDENTIAL_FIELDS:
+            if field in vals and vals[field]:
+                vals[field] = encrypt_credential(self.env, vals[field])
+        return super().write(vals)  # super() calls ThreePlConnector.write() which handles _CREDENTIAL_FIELDS
 
     def action_test_connection(self):
         """Test REST API connectivity to MF."""

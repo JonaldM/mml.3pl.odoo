@@ -18,7 +18,7 @@ class RestTransport(AbstractTransport):
         url = endpoint or self.connector.api_url
         headers = {
             'Content-Type': CONTENT_TYPES.get(content_type, 'application/xml'),
-            'Authorization': f'Bearer {self.connector.api_secret}',
+            'Authorization': f'Bearer {self.connector.get_credential("api_secret")}',
         }
         try:
             data = payload if isinstance(payload, bytes) else payload.encode('utf-8')
@@ -50,7 +50,7 @@ class RestTransport(AbstractTransport):
         Returns [] on any error or non-200 response.
         """
         url = path or self.connector.api_url
-        headers = {'Authorization': f'Bearer {self.connector.api_secret}'}
+        headers = {'Authorization': f'Bearer {self.connector.get_credential("api_secret")}'}
         try:
             resp = requests.get(url, headers=headers, timeout=30)
             if resp.status_code == 200:

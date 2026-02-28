@@ -111,6 +111,10 @@ class _FakeConnector:
         self.environment = environment
         self.mf_tracking_secret = mf_tracking_secret
 
+    def get_credential(self, field_name):
+        """Return the credential field value directly (no encryption in tests)."""
+        return getattr(self, field_name, None)
+
 
 def _make_cron(env_lookup=None):
     """Construct an MFTrackingCron instance with a mocked self.env."""

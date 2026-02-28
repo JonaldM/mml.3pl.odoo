@@ -1,4 +1,5 @@
 from odoo import models, fields
+from odoo.addons.stock_3pl_core.utils.credential_store import encrypt_credential, decrypt_credential
 
 WAREHOUSE_PARTNER_SELECTION = [
     ('mainfreight', 'Mainfreight'),
@@ -19,6 +20,8 @@ ENVIRONMENT_SELECTION = [
 class ThreePlConnector(models.Model):
     _name = '3pl.connector'
     _description = '3PL Warehouse Connector'
+
+    _CREDENTIAL_FIELDS = ('api_secret', 'sftp_password')
 
     name = fields.Char(required=True)
     active = fields.Boolean(default=True)
@@ -73,6 +76,28 @@ class ThreePlConnector(models.Model):
     def _compute_message_count(self):
         for rec in self:
             rec.message_count = len(rec.message_ids)
+
+    def write(self, vals):
+        self._encrypt_credential_vals(vals)
+        return super().write(vals)
+
+    def _encrypt_credential_vals(self, vals):
+        """Encrypt any credential fields present in vals, in place."""
+        for field in self._CREDENTIAL_FIELDS:
+            if field in vals and vals[field]:
+                vals[field] = encrypt_credential(self.env, vals[field])
+
+    def get_credential(self, field_name):
+        """Return the decrypted value of a credential field.
+
+        Usage: connector.get_credential('api_secret')
+        instead of: connector.api_secret
+        """
+        self.ensure_one()
+        raw = getattr(self, field_name, None)
+        if not raw:
+            return raw
+        return decrypt_credential(self.env, raw)
 
     def get_transport(self):
         """Return the appropriate transport adapter for this connector."""

@@ -63,6 +63,9 @@ def _make_connector(sftp_host_key='', name='Test SFTP'):
     connector.sftp_password = 'pass'
     connector.sftp_outbound_path = '/out'
     connector.sftp_inbound_path = '/in'
+    # get_credential('sftp_password') is called by sftp.py since credentials are
+    # stored encrypted at rest.  Wire it up to return the plaintext value.
+    connector.get_credential.side_effect = lambda field: getattr(connector, field)
     return connector
 
 
