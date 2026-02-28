@@ -29,6 +29,10 @@ MF_TRACKING_STATUS_MAP = {
 class MainfreightRestTransport(RestTransport):
     """MF-specific REST transport — handles MF auth and endpoint routing."""
 
+    def _get_auth_secret(self):
+        """Use mf_warehousing_secret for Bearer auth on MF warehouse endpoints."""
+        return self.connector.get_credential('mf_warehousing_secret') or ''
+
     def _get_base_url(self):
         return MF_ENDPOINTS.get(self.connector.environment, MF_ENDPOINTS['test'])
 
