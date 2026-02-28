@@ -156,3 +156,59 @@ The `pytest.ini` at the repo root defines the `odoo_integration` marker and supp
 - Ti-Hi fields (`x_mf_carton_per_layer`, `x_mf_layer_per_pallet`): stub in XML builder, skip if None
 - L×W×H per pack level: CBM exists, dimensions not yet available — same stub approach
 - SO Acknowledgement (ACKH/ACKL): CSV inbound, maps to `mf_received` status
+
+## Sprint 2 Additions
+
+### New Service Models
+
+Both are `AbstractModel` instances (no database table, no ACL required):
+
+- `mf.route.engine` (`addons/stock_3pl_mainfreight/models/route_engine.py`) — haversine-based warehouse selection; raises `UserError` if no `x_mf_enabled` warehouse exists
+- `mf.split.engine` (`addons/stock_3pl_mainfreight/models/split_engine.py`) — applies routing assignments to `stock.picking` records; sets cross-border flags
+
+### New Custom Fields
+
+```
+stock.warehouse:  x_mf_latitude (Float), x_mf_longitude (Float), x_mf_enabled (Boolean)
+stock.picking:    x_mf_routed_by (Selection: manual/auto_closest/auto_split),
+                  x_mf_cross_border (Boolean)
+sale.order:       x_mf_split (Boolean)
+```
+
+### Cross-Border Logic
+
+When `warehouse.partner_id.country_id != order.partner_shipping_id.country_id`:
+- `x_mf_cross_border` is set to `True` on the `stock.picking`
+- `x_mf_status` is set to `'mf_held_review'` (held pending manual release)
+- Manual release via `action_approve_cross_border()` on `stock.picking`
+
+### Haversine Utility
+
+Pure-Python function at `addons/stock_3pl_mainfreight/utils/haversine.py`. Computes great-circle distance in km between two (lat, lng) coordinate pairs. Used by `mf.route.engine` to select the closest enabled warehouse to the delivery address.
+
+### Routing Pre-Processor
+
+`_route_pending_orders()` is called at the start of `_run_mf_push` (in `picking_mf.py`) to assign warehouse routing before outbound XML is generated. Orders without routing are assigned via haversine; orders with `partner_latitude == 0 and partner_longitude == 0` fall back to the first enabled warehouse.
+
+### UX Views Added (Sprint 2)
+
+| File | Purpose |
+|------|---------|
+| `stock_3pl_mainfreight/views/picking_mf_views.xml` | Inline `x_mf_status` on `stock.picking` tree and form |
+| `stock_3pl_mainfreight/views/exception_views.xml` | Exception queue list view for held/failed pickings |
+| `stock_3pl_mainfreight/views/menu_mf.xml` | Top-level Mainfreight menu and sub-menu items |
+| `stock_3pl_mainfreight/views/warehouse_mf_views.xml` | Extends warehouse form with Mainfreight Routing group |
+| `stock_3pl_core/views/connector_views.xml` | Kanban view for `3pl.connector` (status overview) |
+
+### Field Rename
+
+`forwarder` renamed to `warehouse_partner` everywhere — applies to both `3pl.connector` and `3pl.message` models. Update any domain filters or XML references that previously used `forwarder`.
+
+### Test Suite
+
+| Milestone | Count |
+|-----------|-------|
+| Sprint 1 end | 44 pure-Python tests |
+| Sprint 2 end | 100 pure-Python tests |
+
+Pure-Python tests cover: haversine util, route engine logic, split engine logic, cross-border detection, push cron wiring, all document builders, CSV/XML parsers, and field definitions. Odoo integration tests (requiring `odoo-bin --test-enable`) are in `test_routing_integration.py` and skipped by `pytest -m "not odoo_integration"`.
