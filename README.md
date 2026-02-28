@@ -16,35 +16,41 @@ The codebase is structured as two Odoo addons. `stock_3pl_core` is a forwarder-a
 addons/
 ├── stock_3pl_core/              # Platform layer (forwarder-agnostic)
 │   ├── models/
-│   │   ├── connector.py         # 3pl.connector — warehouse/transport config
+│   │   ├── connector.py         # 3pl.connector — warehouse/transport config + Fernet credential helpers
 │   │   ├── message.py           # 3pl.message — queue, state machine, retry
-│   │   ├── transport_base.py    # TransportBase abstract class
-│   │   └── document_base.py     # AbstractDocument + FreightForwarderMixin
+│   │   ├── transport_base.py    # AbstractTransport base class (send, poll, get_tracking_status)
+│   │   └── document_base.py     # AbstractDocument + WarehousePartnerMixin
 │   ├── transport/
-│   │   ├── rest_api.py          # RestTransport
-│   │   ├── sftp.py              # SFTPTransport (requires paramiko)
+│   │   ├── rest_api.py          # RestTransport (Bearer auth via _get_auth_secret hook)
+│   │   ├── sftp.py              # SftpTransport (requires paramiko; strict host key when sftp_host_key set)
 │   │   └── http_post.py         # HttpPostTransport
+│   ├── utils/
+│   │   └── credential_store.py  # Fernet symmetric encryption for connector secrets
 │   ├── views/                   # Connector form, message list, menus
 │   └── data/cron.xml            # Outbound queue cron (5 min), inbound poll cron (15 min)
-└── stock_3pl_mainfreight/       # Mainfreight implementation
+└── stock_3pl_mainfreight/       # Mainfreight + Freightways implementation
     ├── models/
-    │   ├── connector_mf.py      # MF API credentials and environment
+    │   ├── connector_mf.py      # MF API credentials (mf_*_secret fields, encrypted)
+    │   ├── connector_freightways.py  # Freightways/Castle Parcels credentials (fw_api_key)
     │   ├── warehouse_mf.py      # x_mf_warehouse_code, x_mf_customer_id, lat/lng
     │   ├── picking_mf.py        # x_mf_status (10-state lifecycle), tracking fields
     │   ├── sale_order_mf.py     # x_mf_sent, x_mf_filename, x_mf_split
     │   ├── sale_order_hook.py   # action_confirm → enqueue 3pl.message
     │   ├── product_hook.py      # write() on sync fields → enqueue product_spec
-    │   ├── route_engine.py      # mf.route.engine — haversine warehouse selection
+    │   ├── route_engine.py      # mf.route.engine — haversine distance + optional MF SOH API cross-check
     │   ├── split_engine.py      # mf.split.engine — applies routing to stock.picking
-    │   └── push_cron.py         # mf.push.cron — routes orders then fires outbound queue
+    │   ├── push_cron.py         # mf.push.cron — routes orders then fires outbound queue
+    │   ├── tracking_cron.py     # mf.tracking.cron — polls MF/Freightways tracking APIs (30 min)
+    │   └── inbound_cron.py      # mf.inbound.cron — polls inventory reports + reconciles stale orders (60 min)
     ├── document/
     │   ├── product_spec.py      # CSV builder (outbound)
     │   ├── sales_order.py       # XML builder (outbound)
-    │   ├── so_confirmation.py   # XML parser (inbound)
+    │   ├── so_confirmation.py   # XML parser (inbound, XXE hardened)
     │   ├── so_acknowledgement.py # CSV parser (inbound, ACKH/ACKL)
     │   └── inventory_report.py  # CSV parser → stock.quant upsert (inbound)
     ├── transport/
-    │   └── mainfreight_rest.py  # MainfreightRestTransport
+    │   ├── mainfreight_rest.py  # MainfreightRestTransport (warehousing + tracking APIs)
+    │   └── freightways_rest.py  # FreightwaysRestTransport (Castle Parcels tracking API)
     └── utils/
         └── haversine.py         # Pure-Python great-circle distance
 ```
@@ -66,9 +72,11 @@ The Mainfreight implementation. All Mainfreight-specific logic lives here, inclu
 
 | Model | Description |
 |-------|-------------|
-| `mf.route.engine` | AbstractModel; selects warehouses using haversine distance and stock checks |
+| `mf.route.engine` | AbstractModel; selects warehouses using haversine distance + optional MF SOH API cross-check |
 | `mf.split.engine` | AbstractModel; applies routing assignments to `stock.picking` records |
 | `mf.push.cron` | AbstractModel; pre-processes routing then fires the outbound queue |
+| `mf.tracking.cron` | AbstractModel; polls MF and Freightways tracking APIs; updates picking status fields |
+| `mf.inbound.cron` | AbstractModel; polls inventory report CSV payloads; reconciles stale `mf_sent` orders |
 
 ## Key Concepts
 
@@ -100,6 +108,8 @@ A connector also aggregates the message queue: the `message_ids` one2many lists 
 5. **Multi-line orders**: greedy assignment — for each warehouse in distance order, assign as many lines as available stock allows; continue until all lines are assigned.
 6. Fall back to the first enabled warehouse if the partner has no geocoordinates.
 
+When `x_mf_use_api_soh = True` is set on the connector, `_check_stock()` also calls the MF SOH API and uses the MF-reported `QuantityAvailable` when it differs from the Odoo quant, logging a drift warning. This is optional and off by default.
+
 `mf.split.engine.apply_routing(order, assignments)` takes the assignment list and creates or updates `stock.picking` records accordingly, setting `x_mf_routed_by` and triggering cross-border detection.
 
 ### Cross-Border Detection
@@ -108,6 +118,24 @@ When the warehouse country differs from the delivery address country:
 - `x_mf_cross_border` is set to `True` on the `stock.picking`.
 - `x_mf_status` is set to `mf_held_review`.
 - The picking is held until manually released via `action_approve_cross_border()`.
+
+### Tracking
+
+`mf.tracking.cron._run_mf_tracking()` runs every 30 minutes. It finds all `stock.picking` records in a non-terminal tracking state (`mf_sent`, `mf_received`, `mf_dispatched`, `mf_in_transit`, `mf_out_for_delivery`) that have a connote number set. For each picking it resolves the connector by warehouse, calls `connector.get_transport().get_tracking_status(connote)`, and writes back any updated status, POD URL, signed-by name, and delivery timestamp.
+
+`get_transport()` dispatches to the correct transport subclass based on `connector.warehouse_partner`:
+- `mainfreight` → `MainfreightRestTransport` — calls the MF Tracking API (`trackingapi.mainfreight.com`) with `mf_tracking_secret`
+- `freightways` → `FreightwaysRestTransport` — calls the Freightways/Castle Parcels Tracking API (`api.freightways.co.nz`) with `fw_api_key` via `X-API-Key` header
+
+Terminal statuses (`mf_delivered`, `mf_exception`) are never overwritten by the tracking cron.
+
+### Inbound Polling and Order Reconciliation
+
+`mf.inbound.cron._run_mf_inbound()` runs every 60 minutes and performs two tasks:
+
+1. **Inventory report polling**: polls each active MF connector via its transport (`poll()`), detects SFTP `(filename, content)` tuples vs REST raw strings, and calls `InventoryReportDocument.apply_csv()` for each CSV payload retrieved. Files larger than 50 MB are skipped with a warning.
+
+2. **Stale order reconciliation**: finds `stock.picking` records that have been in `mf_sent` status for longer than the configured threshold (default 48 hours, configurable via `ir.config_parameter` key `stock_3pl_mainfreight.reconcile_hours`) and have never received a connote. These are flagged as `mf_exception` for manual review.
 
 ### Document Types
 
@@ -175,17 +203,25 @@ Go to **3PL Integration → Connectors → New**:
 | Warehouse Code | MF-assigned warehouse code |
 | Notify User | Odoo user to alert when a message is dead-lettered |
 
-**For REST API transport**, fill:
-- API URL
-- API Secret (stored masked)
+**For Mainfreight REST API transport**, fill:
+- Warehousing API Secret (`mf_warehousing_secret`) — used for `/Order` and `/Inward` endpoints
+- Tracking API Secret (`mf_tracking_secret`) — used for the MF Tracking API
+- Label, Rating secrets as required for additional MF API surfaces
+
+**For Freightways / Castle Parcels REST API transport**, fill:
+- Freightways API Key (`fw_api_key`) — sent as `X-API-Key` header
+- Freightways Account Number
 
 **For SFTP transport**, fill:
 - SFTP Host, Port (default 22), Username, Password (stored masked)
 - Inbound Path (default `/in`), Outbound Path (default `/out`)
+- **SFTP Host Key** (optional but recommended for production): paste the server's public key in `known_hosts` format (output of `ssh-keyscan <host>`). When set, paramiko uses `RejectPolicy` and refuses connections from unexpected hosts. When blank, new host keys are accepted with a logged warning.
 
 **For HTTP POST transport**, fill:
 - HTTP POST URL
 - Transport Name (UniqueID)
+
+**SOH API cross-check** (optional): enable `Use MF SOH API for Routing` on the connector to cross-check Odoo quant stock against the live MF SOH API during routing decisions.
 
 ### Step 4 — Verify Cron Jobs
 
@@ -195,8 +231,12 @@ Go to **Technical → Scheduled Actions** and confirm these are active:
 |----------|--------------|------------------|
 | 3PL: Process Outbound Queue | `3pl.message._process_outbound_queue()` | Every 5 minutes |
 | 3PL: Poll Inbound Messages | `3pl.message._poll_inbound()` | Every 15 minutes |
+| MF: Poll Tracking Status | `mf.tracking.cron._run_mf_tracking()` | Every 30 minutes |
+| MF: Poll Inbound Reports | `mf.inbound.cron._run_mf_inbound()` | Every 60 minutes |
 
 The MF push cron (`mf.push.cron._run_mf_push()`) calls `_route_pending_orders()` before delegating to `_process_outbound_queue()`, so routing happens automatically on each push cycle.
+
+The inbound cron also runs `_reconcile_sent_orders()` on each cycle to flag pickings stuck in `mf_sent` without a connote — configure the stale threshold with system parameter `stock_3pl_mainfreight.reconcile_hours` (default: 48).
 
 ## MF-Specific Fields
 
@@ -271,7 +311,7 @@ python odoo-bin -u stock_3pl_core,stock_3pl_mainfreight \
 
 The `conftest.py` at the repo root automatically marks any test class that imports from `odoo.tests` with the `odoo_integration` pytest marker, so the `-m "not odoo_integration"` filter works without decorating individual files.
 
-Sprint 1 delivered 44 pure-Python tests covering the platform layer and all document builders. Sprint 2 targets 100 pure-Python tests adding coverage for haversine, route engine, split engine, cross-border detection, and push cron wiring.
+Sprint 1 delivered 44 pure-Python tests. Sprint 2 extended to 100 tests adding haversine, route engine, split engine, cross-border detection, and push cron coverage. Sprint 3 brought the total to **228 pure-Python tests** covering tracking cron, inbound cron, SOH cross-check, credential encryption, SFTP host key verification, and the Freightways transport adapter. 65 Odoo integration tests require `odoo-bin` and are tagged `odoo_integration`.
 
 ## Development
 
@@ -303,11 +343,15 @@ No changes to `stock_3pl_core` or `stock_3pl_mainfreight` are required.
 
 ## Security Notes
 
-- `api_secret` and `sftp_password` are stored with `password=True`, masking them in the UI. Both fields are restricted to `stock.group_stock_manager`.
-- XML parsing (inbound SO Confirmation, Inward Confirmation) uses explicit XXE hardening with `resolve_entities=False` on the lxml parser.
-- SFTP connections log a warning for unverified host keys. Configure a `known_hosts` file on the Odoo server for production deployments.
-- All inbound 3PL data is validated against expected field names and types before any ORM lookup or write is attempted.
-- The `source_hash` deduplication (SHA-256) prevents replayed inbound payloads from being applied twice.
+**Credential encryption at rest:** All API secrets (`api_secret`, `sftp_password`, `mf_*_secret`, `fw_api_key`) are encrypted with Fernet symmetric encryption before being written to the database. The master key is auto-generated on first use and stored in `ir.config_parameter` under `stock_3pl_core.credential_key`. Transport adapters read credentials via `connector.get_credential(field)` which decrypts on the fly. Legacy plaintext values (written before encryption was introduced) are passed through transparently. **Note:** this protects against unprivileged SQL reads but does not protect against full database dumps — operators requiring stronger at-rest protection should use PostgreSQL full-disk encryption or a secrets manager for the master key.
+
+**SFTP host key verification:** Setting the `SFTP Host Key` field on a connector (paste output of `ssh-keyscan <host>`) enables strict verification via `paramiko.RejectPolicy()`. Without it, new host keys are accepted with a logged warning — acceptable for development but not for production.
+
+**XML XXE hardening:** All XML parsers use `etree.XMLParser(resolve_entities=False, no_network=True)` to prevent external entity injection.
+
+**Input validation:** All inbound 3PL data (tracking API responses, SOH API quantities, CSV inventory reports) is validated before ORM writes. Tracking status values are checked against an allowlist; POD URLs must use `https://`; SOH quantities are checked for NaN/Inf/negative/extreme values; CSV payloads over 50 MB are rejected.
+
+**Idempotency:** `source_hash` deduplication (SHA-256) prevents replayed inbound payloads from being applied twice. All credential fields carry `password=True` and `groups='stock.group_stock_manager'`.
 
 ## Sprint Status
 
@@ -315,7 +359,9 @@ No changes to `stock_3pl_core` or `stock_3pl_mainfreight` are required.
 |--------|-------|--------|
 | Sprint 1, Tasks 1–9 | `stock_3pl_core` platform layer: connector, message queue, transport abstraction, document base, views, cron | Complete |
 | Sprint 1, Tasks 10–17 | `stock_3pl_mainfreight`: document builders, event triggers, transport, custom fields | Complete |
-| Sprint 2 | Warehouse routing engine (haversine, stock check, split logic), cross-border hold, full operational UX (dashboard, kanban, exception queues) | In progress |
+| Sprint 2 | Warehouse routing engine (haversine, stock check, split logic), cross-border hold, operational UX (connector views, exception queues, picking status) | Complete |
+| Sprint 3 | Tracking API (MF + Freightways), SOH API cross-check, inbound polling cron, stale order reconciliation, SFTP strict host key, Fernet credential encryption, integration test suite | Complete |
+| Phase 2 | Dashboard, kanban pipeline, metrics widgets | Planned |
 
 ## License
 
