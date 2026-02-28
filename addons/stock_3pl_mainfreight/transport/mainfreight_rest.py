@@ -2,6 +2,7 @@
 import logging
 import datetime
 import requests
+from urllib.parse import quote
 from odoo.addons.stock_3pl_core.transport.rest_api import RestTransport
 
 _logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ class MainfreightRestTransport(RestTransport):
         Returns {} on any error or if the MF status string is not recognised.
         """
         secret = self.connector.get_credential('mf_tracking_secret') or ''
-        url = f'{self._get_tracking_base_url()}/Tracking/{connote}'
+        url = f'{self._get_tracking_base_url()}/Tracking/{quote(connote, safe="")}'
         try:
             response = requests.get(
                 url,
@@ -71,7 +72,7 @@ class MainfreightRestTransport(RestTransport):
             )
             response.raise_for_status()
         except requests.exceptions.RequestException as exc:
-            _logger.error('get_tracking_status: HTTP request failed for %s: %s', connote, exc)
+            _logger.error('get_tracking_status: HTTP request failed for %s: %s', connote, str(exc)[:200])
             return {}
 
         try:

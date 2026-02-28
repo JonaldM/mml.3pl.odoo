@@ -80,10 +80,28 @@ class MFTrackingCron(models.AbstractModel):
         write_vals = {}
 
         new_status = result.get('status')
+        if new_status:
+            # Validate against known trackable statuses (not terminals — those stop tracking)
+            if new_status not in _TRACKABLE_STATUSES and new_status not in _TERMINAL_STATUSES:
+                _logger.warning(
+                    '_poll_and_update: unknown status %r from tracking API for picking %s — ignoring',
+                    new_status, picking.name,
+                )
+                new_status = None
+
         if new_status and picking.x_mf_status not in _TERMINAL_STATUSES:
             write_vals['x_mf_status'] = new_status
 
+        # Validate pod_url scheme — only allow https://
         pod_url = result.get('pod_url')
+        if pod_url:
+            if not isinstance(pod_url, str) or not pod_url.startswith('https://'):
+                _logger.warning(
+                    '_poll_and_update: rejecting pod_url with unsafe scheme for picking %s: %r',
+                    picking.name, pod_url[:100],
+                )
+                pod_url = None
+
         if pod_url:
             write_vals['x_mf_pod_url'] = pod_url
 

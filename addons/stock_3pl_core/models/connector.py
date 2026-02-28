@@ -1,4 +1,4 @@
-from odoo import models, fields
+from odoo import models, fields, api
 from odoo.addons.stock_3pl_core.utils.credential_store import encrypt_credential, decrypt_credential
 
 WAREHOUSE_PARTNER_SELECTION = [
@@ -78,6 +78,11 @@ class ThreePlConnector(models.Model):
         for rec in self:
             rec.message_count = len(rec.message_ids)
 
+    @api.model
+    def create(self, vals):
+        self._encrypt_credential_vals(vals)
+        return super().create(vals)
+
     def write(self, vals):
         self._encrypt_credential_vals(vals)
         return super().write(vals)
@@ -93,8 +98,24 @@ class ThreePlConnector(models.Model):
 
         Usage: connector.get_credential('api_secret')
         instead of: connector.api_secret
+
+        This method bypasses Odoo field-level groups= access control;
+        never expose it through an RPC-accessible route.
         """
         self.ensure_one()
+        # Build allowlist from all credential field tuples defined on this class and its parents.
+        _allowed = set()
+        for cls in type(self).__mro__:
+            if hasattr(cls, '_CREDENTIAL_FIELDS'):
+                _allowed.update(cls._CREDENTIAL_FIELDS)
+            if hasattr(cls, '_MF_CREDENTIAL_FIELDS'):
+                _allowed.update(cls._MF_CREDENTIAL_FIELDS)
+            if hasattr(cls, '_FW_CREDENTIAL_FIELDS'):
+                _allowed.update(cls._FW_CREDENTIAL_FIELDS)
+        if field_name not in _allowed:
+            raise ValueError(
+                f'get_credential: "{field_name}" is not a registered credential field.'
+            )
         raw = getattr(self, field_name, None)
         if not raw:
             return raw

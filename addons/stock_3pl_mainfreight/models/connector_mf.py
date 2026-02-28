@@ -1,4 +1,4 @@
-from odoo import models, fields
+from odoo import models, fields, api
 from odoo.addons.stock_3pl_core.utils.credential_store import encrypt_credential
 
 MF_ENVIRONMENTS = {
@@ -30,6 +30,13 @@ class ThreePlConnectorMF(models.Model):
     mf_label_secret = fields.Char('Label API Secret', password=True, groups='stock.group_stock_manager')
     mf_rating_secret = fields.Char('Rating API Secret', password=True, groups='stock.group_stock_manager')
     mf_tracking_secret = fields.Char('Tracking API Secret', password=True, groups='stock.group_stock_manager')
+
+    @api.model
+    def create(self, vals):
+        for field in self._MF_CREDENTIAL_FIELDS:
+            if field in vals and vals[field]:
+                vals[field] = encrypt_credential(self.env, vals[field])
+        return super().create(vals)
 
     def write(self, vals):
         for field in self._MF_CREDENTIAL_FIELDS:

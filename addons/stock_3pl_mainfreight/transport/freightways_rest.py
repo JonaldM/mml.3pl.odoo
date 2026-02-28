@@ -3,6 +3,7 @@
 import logging
 import datetime
 import requests
+from urllib.parse import quote
 from odoo.addons.stock_3pl_core.transport.rest_api import RestTransport
 
 _logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ class FreightwaysRestTransport(RestTransport):
         Returns {} on any error or if the FW status string is not recognised.
         """
         api_key = self.connector.get_credential('fw_api_key') or ''
-        url = f'{self._get_base_url()}/Tracking/{connote}'
+        url = f'{self._get_base_url()}/Tracking/{quote(connote, safe="")}'
         try:
             response = requests.get(
                 url,
@@ -59,7 +60,7 @@ class FreightwaysRestTransport(RestTransport):
         except requests.exceptions.RequestException as exc:
             _logger.error(
                 'FreightwaysRestTransport.get_tracking_status: HTTP request failed for %s: %s',
-                connote, exc,
+                connote, str(exc)[:200],
             )
             return {}
 

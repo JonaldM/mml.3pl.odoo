@@ -19,8 +19,9 @@ class RestTransport(AbstractTransport):
 
         Subclasses override this to use a transport-specific credential field.
         e.g. MainfreightRestTransport returns 'mf_warehousing_secret'.
+        Returns an empty string (never None) so Bearer token headers are always safe.
         """
-        return self.connector.get_credential('api_secret')
+        return self.connector.get_credential('api_secret') or ''
 
     def send(self, payload, content_type='xml', filename=None, endpoint=None):
         url = endpoint or self.connector.api_url

@@ -15,6 +15,7 @@ Usage:
     plaintext  = decrypt_credential(env, ciphertext)
 """
 import logging
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def _get_or_create_key(env) -> bytes:
 
     new_key = Fernet.generate_key()          # bytes, already base64-encoded
     IrParam.set_param(_PARAM_KEY, new_key.decode())
-    _logger.info('stock_3pl_core: generated new Fernet credential encryption key.')
+    _logger.warning('stock_3pl_core: generated new Fernet credential encryption key ...')
     return new_key
 
 
@@ -61,8 +62,12 @@ def encrypt_credential(env, value: str) -> str:
         token = f.encrypt(value.encode('utf-8'))
         return _PREFIX + token.decode()
     except Exception as exc:
-        _logger.error('encrypt_credential: failed to encrypt value: %s', exc)
-        return value
+        _logger.error('encrypt_credential: Fernet encryption failed: %s', exc)
+        raise UserError(
+            'Credential encryption failed. Ensure the "cryptography" package is installed '
+            'and the encryption key in ir.config_parameter is valid. '
+            f'Error: {str(exc)[:200]}'
+        )
 
 
 def decrypt_credential(env, value: str) -> str:

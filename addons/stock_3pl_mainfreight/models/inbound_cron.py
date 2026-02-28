@@ -7,6 +7,8 @@ from odoo import models, api, fields
 
 _logger = logging.getLogger(__name__)
 
+_MAX_CSV_BYTES = 50 * 1024 * 1024  # 50 MB
+
 
 class MFInboundCron(models.AbstractModel):
     """Cron service model for the Mainfreight inbound polling pipeline.
@@ -81,6 +83,14 @@ class MFInboundCron(models.AbstractModel):
                             '_poll_inventory_reports: connector=%s file=%s — '
                             'empty or non-string content, skipping',
                             connector.name, filename,
+                        )
+                        skipped += 1
+                        continue
+
+                    if len(content.encode('utf-8')) > _MAX_CSV_BYTES:
+                        _logger.warning(
+                            'MF inbound: connector=%s, file=%s exceeds 50 MB limit (%d bytes) — skipping.',
+                            connector.name, filename, len(content.encode('utf-8')),
                         )
                         skipped += 1
                         continue

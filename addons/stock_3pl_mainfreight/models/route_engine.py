@@ -1,5 +1,6 @@
 # addons/stock_3pl_mainfreight/models/route_engine.py
 import logging
+import math
 from odoo import models, api
 from odoo.exceptions import UserError
 from odoo.addons.stock_3pl_mainfreight.utils.haversine import sort_warehouses_by_distance
@@ -193,6 +194,13 @@ class MFRouteEngine(models.AbstractModel):
             if not code or code not in soh_by_code:
                 continue
             mf_qty = float(soh_by_code[code])
+            if math.isnan(mf_qty) or math.isinf(mf_qty) or mf_qty < 0.0 or mf_qty > 1e9:
+                _logger.warning(
+                    '_check_stock: SOH API returned out-of-bounds quantity %.2f '
+                    'for product %s — skipping MF override, using Odoo qty.',
+                    mf_qty, code,
+                )
+                continue
             odoo_qty = result[product]
             drift = abs(mf_qty - odoo_qty)
             if drift > _SOH_DRIFT_LOG_THRESHOLD:
