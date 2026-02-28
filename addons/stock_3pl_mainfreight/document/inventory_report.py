@@ -60,6 +60,8 @@ class InventoryReportDocument(AbstractDocument):
         """Parse and apply a full SOH report to stock.quant for the connector's warehouse."""
         lines = self.parse_inbound(payload)
         stock_location = self.connector.warehouse_id.lot_stock_id
+        ICP = self.env['ir.config_parameter'].sudo()
+        tolerance = float(ICP.get_param('stock_3pl_mainfreight.ira_tolerance', '0.005'))
 
         applied = 0
         skipped = 0
@@ -78,8 +80,23 @@ class InventoryReportDocument(AbstractDocument):
                 skipped += 1
                 continue
 
-            self._sync_quant(product, stock_location, line['stock_on_hand'])
+            mf_qty = float(line['stock_on_hand'])
+
+            # Capture current Odoo qty BEFORE sync to detect drift
+            existing_quant = self.env['stock.quant'].search([
+                ('product_id', '=', product.id),
+                ('location_id', '=', stock_location.id),
+            ], limit=1)
+            odoo_qty = existing_quant.quantity if existing_quant else 0.0
+
+            self._sync_quant(product, stock_location, mf_qty)
             applied += 1
+
+            # Write discrepancy record if drift exceeds tolerance
+            variance = abs(mf_qty - odoo_qty)
+            threshold = odoo_qty * tolerance
+            if variance > threshold:
+                self._write_discrepancy(product, mf_qty, odoo_qty)
 
         _logger.info('MF SOH: applied=%d skipped=%d', applied, skipped)
 
@@ -109,6 +126,32 @@ class InventoryReportDocument(AbstractDocument):
                 'location_id': location.id,
                 'quantity': quantity,
             })
+
+    def _write_discrepancy(self, product, mf_qty: float, odoo_qty: float):
+        """Create or update an mf.soh.discrepancy record for this product.
+
+        Upsert pattern: if an open discrepancy already exists for the same
+        product + warehouse, update it in place. Otherwise create a new one.
+        This prevents duplicate open records accumulating across daily SOH runs.
+        """
+        warehouse = self.connector.warehouse_id
+        existing = self.env['mf.soh.discrepancy'].search([
+            ('product_id', '=', product.id),
+            ('warehouse_id', '=', warehouse.id),
+            ('state', '=', 'open'),
+        ], limit=1)
+        vals = {
+            'product_id': product.id,
+            'warehouse_id': warehouse.id,
+            'mf_qty': mf_qty,
+            'odoo_qty': odoo_qty,
+            'detected_date': datetime.now(),
+            'state': 'open',
+        }
+        if existing:
+            existing.write(vals)
+        else:
+            self.env['mf.soh.discrepancy'].create(vals)
 
     @staticmethod
     def _parse_date(date_str):
