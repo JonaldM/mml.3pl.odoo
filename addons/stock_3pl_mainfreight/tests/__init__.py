@@ -12,3 +12,4 @@ from . import test_push_cron
 from . import test_routing_integration
 from . import test_tracking_cron
 from . import test_inbound_cron
+from . import test_freightways_rest

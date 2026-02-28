@@ -3,6 +3,7 @@ from odoo.addons.stock_3pl_core.utils.credential_store import encrypt_credential
 
 WAREHOUSE_PARTNER_SELECTION = [
     ('mainfreight', 'Mainfreight'),
+    ('freightways', 'Freightways / Castle Parcels'),
 ]
 
 TRANSPORT_SELECTION = [
@@ -103,6 +104,12 @@ class ThreePlConnector(models.Model):
         """Return the appropriate transport adapter for this connector."""
         self.ensure_one()
         if self.transport == 'rest_api':
+            if self.warehouse_partner == 'mainfreight':
+                from odoo.addons.stock_3pl_mainfreight.transport.mainfreight_rest import MainfreightRestTransport
+                return MainfreightRestTransport(self)
+            if self.warehouse_partner == 'freightways':
+                from odoo.addons.stock_3pl_mainfreight.transport.freightways_rest import FreightwaysRestTransport
+                return FreightwaysRestTransport(self)
             from odoo.addons.stock_3pl_core.transport.rest_api import RestTransport
             return RestTransport(self)
         elif self.transport == 'sftp':
