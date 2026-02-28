@@ -1,1 +1,1 @@
-# Transport extensions added in later tasks (Task 17)
+from . import mainfreight_rest

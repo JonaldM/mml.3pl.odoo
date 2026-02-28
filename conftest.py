@@ -48,6 +48,12 @@ def _install_odoo_stubs():
         pass
 
     class Datetime(_BaseField):
+        @classmethod
+        def now(cls):
+            import datetime
+            return datetime.datetime.utcnow()
+
+    class Date(_BaseField):
         pass
 
     class Many2one(_BaseField):
@@ -72,6 +78,7 @@ def _install_odoo_stubs():
     odoo_fields.Boolean = Boolean
     odoo_fields.Char = Char
     odoo_fields.Datetime = Datetime
+    odoo_fields.Date = Date
     odoo_fields.Many2one = Many2one
     odoo_fields.One2many = One2many
     odoo_fields.Many2many = Many2many

@@ -1,5 +1,6 @@
 # addons/stock_3pl_core/models/message.py
 from odoo import models, fields, api
+import hashlib
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -235,3 +236,43 @@ class ThreePlMessage(models.Model):
             f'3PL message {self.id} has no payload to send (payload_xml, '
             f'payload_json, and payload_csv are all empty).'
         )
+
+    # ---- Cron-driven inbound poller ----
+
+    @api.model
+    def _poll_inbound(self):
+        """Called by cron. Poll all active connectors for inbound messages."""
+        connectors = self.env['3pl.connector'].search([('active', '=', True)])
+        for connector in connectors:
+            try:
+                transport = connector.get_transport()
+                payloads = transport.poll()
+                for raw in payloads:
+                    source_hash = hashlib.sha256(raw.encode()).hexdigest()
+                    existing = self.search([
+                        ('connector_id', '=', connector.id),
+                        ('source_hash', '=', source_hash),
+                    ], limit=1)
+                    if existing:
+                        continue  # Deduplicate
+                    self.create({
+                        'connector_id': connector.id,
+                        'direction': 'inbound',
+                        'document_type': self._detect_inbound_type(raw),
+                        'payload_xml': raw if raw.strip().startswith('<') else False,
+                        'payload_csv': raw if not raw.strip().startswith('<') else False,
+                        'source_hash': source_hash,
+                        'state': 'received',
+                    })
+            except Exception as e:
+                _logger.error('Inbound poll failed for %s: %s', connector.name, e)
+
+    @staticmethod
+    def _detect_inbound_type(raw):
+        """Detect document type from inbound payload content."""
+        raw = raw.strip()
+        if '<OrderConfirmation' in raw or '<SCH' in raw:
+            return 'so_confirmation'
+        if '<InwardConfirmation' in raw:
+            return 'inward_confirmation'
+        return 'inventory_report'  # Default: assume CSV = SOH report
