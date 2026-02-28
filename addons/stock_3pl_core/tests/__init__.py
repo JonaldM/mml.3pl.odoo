@@ -1,1 +1,1 @@
-from . import test_connector
+from . import test_connector, test_message
