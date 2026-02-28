@@ -81,3 +81,15 @@ class TestSalesOrderDocument(TransactionCase):
         key = doc.get_idempotency_key(self.order)
         self.assertIsNotNone(key)
         self.assertEqual(len(key), 64)  # SHA-256 hex
+
+    def test_customer_id_from_connector(self):
+        xml = self._build()
+        root = etree.fromstring(xml.encode())
+        self.assertEqual(root.findtext('CustomerID'), '123456')
+
+    def test_idempotency_key_is_deterministic(self):
+        from odoo.addons.stock_3pl_mainfreight.document.sales_order import SalesOrderDocument
+        doc = SalesOrderDocument(self.connector, self.env)
+        key1 = doc.get_idempotency_key(self.order)
+        key2 = doc.get_idempotency_key(self.order)
+        self.assertEqual(key1, key2)

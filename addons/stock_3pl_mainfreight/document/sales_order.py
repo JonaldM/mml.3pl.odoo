@@ -22,6 +22,7 @@ class SalesOrderDocument(AbstractDocument):
         self._add(root, 'DeliveryName', partner.name, max_len=50)
         self._add(root, 'DeliveryAddress1', partner.street or '', max_len=50)
         self._add(root, 'DeliveryAddress2', partner.street2 or '', max_len=50)
+        # NZ suburb is not a standard Odoo address field — map via x_mf_suburb in a future task
         self._add(root, 'DeliverySuburb', '', max_len=50)
         self._add(root, 'DeliveryPostCode', partner.zip or '', max_len=50)
         self._add(root, 'DeliveryCity', partner.city or '', max_len=50)
@@ -49,9 +50,9 @@ class SalesOrderDocument(AbstractDocument):
             line_el = etree.SubElement(lines_el, 'Line')
             self._add(line_el, 'LineNumber', str(i))
             self._add(line_el, 'ProductCode',
-                      self.truncate(line.product_id.default_code or '', 40))
+                      line.product_id.default_code or '', max_len=40)
             self._add(line_el, 'Units', str(int(line.product_uom_qty)))
-            self._add(line_el, 'UnitPrice', str(round(line.price_unit, 2)))
+            self._add(line_el, 'UnitPrice', f'{line.price_unit:.2f}')
 
         return etree.tostring(root, pretty_print=True, xml_declaration=True,
                               encoding='UTF-8').decode('utf-8')
