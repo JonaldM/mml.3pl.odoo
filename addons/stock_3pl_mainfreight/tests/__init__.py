@@ -15,3 +15,4 @@ from . import test_inbound_cron
 from . import test_freightways_rest
 from . import test_soh_discrepancy
 from . import test_split_engine
+from . import test_reassign_wizard
