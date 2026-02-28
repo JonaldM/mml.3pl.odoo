@@ -88,6 +88,14 @@ def _make_assignment(warehouse, products_and_qtys):
     }
 
 
+def _make_order_with_picking(picking, name='SO001'):
+    """Build a mock order whose picking_ids.filtered() returns [picking]."""
+    order = MagicMock()
+    order.name = name
+    order.picking_ids.filtered.return_value = [picking]
+    return order
+
+
 # ---------------------------------------------------------------------------
 # Tests: _is_cross_border
 # ---------------------------------------------------------------------------
@@ -177,13 +185,6 @@ class TestApplyRoutingSingle(unittest.TestCase):
         engine._is_cross_border = MagicMock(return_value=cross_border)
         return engine
 
-    def _make_order_with_picking(self, picking):
-        """Build a mock order whose picking_ids.filtered() returns [picking]."""
-        order = MagicMock()
-        order.name = 'SO001'
-        order.picking_ids.filtered.return_value = [picking]
-        return order
-
     def test_single_assignment_sets_auto_closest(self):
         engine = self._make_engine_with_mock_cross_border(cross_border=False)
 
@@ -193,7 +194,7 @@ class TestApplyRoutingSingle(unittest.TestCase):
         # No moves to relocate — filtered returns empty list
         picking.move_lines.filtered.return_value = []
 
-        order = self._make_order_with_picking(picking)
+        order = _make_order_with_picking(picking)
         assignments = [_make_assignment(wh, [(prod, 5.0)])]
 
         # env['stock.picking'] returns a mock recordset for the accumulator start
@@ -217,7 +218,7 @@ class TestApplyRoutingSingle(unittest.TestCase):
         picking = _make_picking()
         picking.move_lines.filtered.return_value = []
 
-        order = self._make_order_with_picking(picking)
+        order = _make_order_with_picking(picking)
         assignments = [_make_assignment(wh, [(prod, 5.0)])]
 
         engine.env.__getitem__.return_value = MagicMock()
@@ -227,6 +228,36 @@ class TestApplyRoutingSingle(unittest.TestCase):
         for c in order.write.call_args_list:
             args = c[0][0] if c[0] else {}
             self.assertNotIn('x_mf_split', args)
+
+    def test_multiple_unrouted_pickings_uses_first_only(self):
+        """When order has 2 unrouted pickings, apply_routing succeeds and uses only the first."""
+        engine = self._make_engine_with_mock_cross_border(cross_border=False)
+
+        prod = _make_product()
+        wh = _make_warehouse('WH-NZ')
+
+        picking_a = _make_picking()
+        picking_a.move_lines.filtered.return_value = []
+        picking_b = _make_picking()
+
+        # Mock order with 2 unrouted pickings
+        order = MagicMock()
+        order.name = 'SO010'
+        order.picking_ids.filtered.return_value = [picking_a, picking_b]
+
+        assignments = [_make_assignment(wh, [(prod, 5.0)])]
+        engine.env.__getitem__.return_value = MagicMock()
+
+        result_pickings_mock = MagicMock()
+        # Capture accumulated pickings via |= by making the env mock return a consistent object
+        engine.env.__getitem__.return_value = result_pickings_mock
+
+        # Should not raise
+        engine.apply_routing(order, assignments)
+
+        # picking_a (index 0) must have been written — picking_b must not
+        self.assertTrue(picking_a.write.called)
+        self.assertFalse(picking_b.write.called)
 
 
 # ---------------------------------------------------------------------------
@@ -240,12 +271,6 @@ class TestApplyRoutingSplit(unittest.TestCase):
         engine = _make_engine()
         engine._is_cross_border = MagicMock(return_value=False)
         return engine
-
-    def _make_order_with_picking(self, picking):
-        order = MagicMock()
-        order.name = 'SO002'
-        order.picking_ids.filtered.return_value = [picking]
-        return order
 
     def _make_split_env_mock(self, picking2):
         """Return an env['stock.picking'] mock suitable for split (2-assignment) tests.
@@ -271,7 +296,7 @@ class TestApplyRoutingSplit(unittest.TestCase):
         picking1 = _make_picking()
         picking1.move_lines.filtered.return_value = []
 
-        order = self._make_order_with_picking(picking1)
+        order = _make_order_with_picking(picking1, name='SO002')
         order.partner_shipping_id = MagicMock()
         order.partner_id = MagicMock()
 
@@ -299,7 +324,7 @@ class TestApplyRoutingSplit(unittest.TestCase):
         picking1 = _make_picking()
         picking1.move_lines.filtered.return_value = []
 
-        order = self._make_order_with_picking(picking1)
+        order = _make_order_with_picking(picking1, name='SO002')
         order.partner_shipping_id = MagicMock()
         order.partner_id = MagicMock()
 
@@ -331,7 +356,7 @@ class TestApplyRoutingSplit(unittest.TestCase):
         picking1 = _make_picking()
         picking1.move_lines.filtered.return_value = []
 
-        order = self._make_order_with_picking(picking1)
+        order = _make_order_with_picking(picking1, name='SO002')
         order.partner_shipping_id = MagicMock()
         order.partner_id = MagicMock()
 
@@ -360,12 +385,6 @@ class TestApplyRoutingSplit(unittest.TestCase):
 class TestApplyRoutingCrossBorder(unittest.TestCase):
     """Cross-border assignment: sets x_mf_cross_border=True, status mf_held_review."""
 
-    def _make_order_with_picking(self, picking):
-        order = MagicMock()
-        order.name = 'SO003'
-        order.picking_ids.filtered.return_value = [picking]
-        return order
-
     def test_cross_border_sets_held_review_status(self):
         engine = _make_engine()
         # Monkeypatch _is_cross_border to return True
@@ -376,7 +395,7 @@ class TestApplyRoutingCrossBorder(unittest.TestCase):
         picking = _make_picking()
         picking.move_lines.filtered.return_value = []
 
-        order = self._make_order_with_picking(picking)
+        order = _make_order_with_picking(picking, name='SO003')
         assignments = [_make_assignment(wh, [(prod, 1.0)])]
 
         engine.env.__getitem__.return_value = MagicMock()
@@ -398,7 +417,7 @@ class TestApplyRoutingCrossBorder(unittest.TestCase):
         picking = _make_picking()
         picking.move_lines.filtered.return_value = []
 
-        order = self._make_order_with_picking(picking)
+        order = _make_order_with_picking(picking, name='SO003')
         assignments = [_make_assignment(wh, [(prod, 1.0)])]
 
         engine.env.__getitem__.return_value = MagicMock()
@@ -414,12 +433,6 @@ class TestApplyRoutingCrossBorder(unittest.TestCase):
 class TestApplyRoutingNonCrossBorder(unittest.TestCase):
     """Non-cross-border assignment: sets x_mf_status='mf_queued'."""
 
-    def _make_order_with_picking(self, picking):
-        order = MagicMock()
-        order.name = 'SO004'
-        order.picking_ids.filtered.return_value = [picking]
-        return order
-
     def test_non_cross_border_sets_queued_status(self):
         engine = _make_engine()
         engine._is_cross_border = MagicMock(return_value=False)
@@ -429,7 +442,7 @@ class TestApplyRoutingNonCrossBorder(unittest.TestCase):
         picking = _make_picking()
         picking.move_lines.filtered.return_value = []
 
-        order = self._make_order_with_picking(picking)
+        order = _make_order_with_picking(picking, name='SO004')
         assignments = [_make_assignment(wh, [(prod, 2.0)])]
 
         engine.env.__getitem__.return_value = MagicMock()
@@ -451,7 +464,7 @@ class TestApplyRoutingNonCrossBorder(unittest.TestCase):
         picking = _make_picking()
         picking.move_lines.filtered.return_value = []
 
-        order = self._make_order_with_picking(picking)
+        order = _make_order_with_picking(picking, name='SO004')
         assignments = [_make_assignment(wh, [(prod, 2.0)])]
 
         engine.env.__getitem__.return_value = MagicMock()

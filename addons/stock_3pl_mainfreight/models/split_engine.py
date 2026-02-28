@@ -45,13 +45,19 @@ class MFSplitEngine(models.AbstractModel):
             line_products = {product for product, _ in assignment['lines']}
 
             if i == 0 and unrouted:
-                # Reuse the first existing picking for the first assignment
+                if len(unrouted) > 1:
+                    _logger.warning(
+                        'split_engine: order %s has %d unrouted pickings; '
+                        'only the first will be reused — extras remain unrouted',
+                        order.name, len(unrouted),
+                    )
                 picking = unrouted[0]
                 # Move any moves NOT in this assignment to a new picking
                 moves_to_move = picking.move_lines.filtered(
                     lambda m: m.product_id not in line_products
                 )
                 if moves_to_move:
+                    # If copy() raises, the transaction rolls back entirely; the cron will retry.
                     new_picking = picking.copy({'move_lines': []})
                     moves_to_move.write({'picking_id': new_picking.id})
                     _logger.info(
@@ -70,7 +76,9 @@ class MFSplitEngine(models.AbstractModel):
                         order.partner_shipping_id or order.partner_id
                     ).property_stock_customer.id,
                 })
-                # Move the relevant moves to this picking
+                # NOTE: The write() at the end of each loop iteration must run before this
+                # search executes on the next pass — already-routed pickings are excluded
+                # by the x_mf_routed_by filter. Do not defer writes outside the loop.
                 moves = self.env['stock.picking'].search([
                     ('sale_id', '=', order.id),
                     ('state', 'not in', ('done', 'cancel')),
