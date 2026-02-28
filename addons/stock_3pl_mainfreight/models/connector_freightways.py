@@ -3,15 +3,6 @@
 from odoo import models, fields
 from odoo.addons.stock_3pl_core.utils.credential_store import encrypt_credential
 
-FREIGHTWAYS_ENVIRONMENTS = {
-    'test': {
-        'rest_api': 'https://api-sandbox.freightways.co.nz/api/v1',
-    },
-    'production': {
-        'rest_api': 'https://api.freightways.co.nz/api/v1',
-    },
-}
-
 _FW_CREDENTIAL_FIELDS = ('fw_api_key',)
 
 
