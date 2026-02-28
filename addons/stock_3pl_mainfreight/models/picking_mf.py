@@ -39,6 +39,14 @@ class StockPickingMF(models.Model):
     # Phase 2: exception ownership
     x_mf_assigned_to = fields.Many2one('res.users', 'Exception Assigned To', copy=False,
                                         groups='stock.group_stock_manager')
+    # Phase 2: connector override for re-routed exceptions
+    x_mf_connector_id = fields.Many2one(
+        '3pl.connector', 'Override Connector',
+        copy=False,
+        help='Set by the Reassign Wizard when an exception is manually re-routed to a '
+             'different 3PL connector. The push cron will use this connector when '
+             're-creating the 3pl.message for this picking.',
+    )
 
     def action_approve_cross_border(self):
         """Release cross-border held pickings for MF push.

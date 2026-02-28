@@ -19,11 +19,16 @@ class MfReassignWarehouseWizard(models.TransientModel):
         """Reassign the picking to the selected connector and re-queue."""
         self.ensure_one()
         picking = self.picking_id
+        # mf_resolved is a terminal state — resolved pickings are not retried.
+        # Only exception or cross-border-held pickings can be reassigned.
         if picking.x_mf_status not in ('mf_exception', 'mf_held_review'):
             raise UserError(
                 f'{picking.name} cannot be reassigned from status: {picking.x_mf_status}.'
             )
-        picking.write({'x_mf_status': 'mf_queued'})
+        picking.write({
+            'x_mf_status': 'mf_queued',
+            'x_mf_connector_id': self.connector_id.id,
+        })
         note = (
             f'Reassigned to {self.connector_id.name} by {self.env.user.name}.'
             + (f' Reason: {self.reason}' if self.reason else '')
