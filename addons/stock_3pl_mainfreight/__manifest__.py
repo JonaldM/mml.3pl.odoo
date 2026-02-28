@@ -14,10 +14,17 @@
         'views/pipeline_views.xml',
         'views/exception_views.xml',
         'views/discrepancy_views.xml',
+        'views/kpi_dashboard_action.xml',
         'views/menu_mf.xml',
         'data/tracking_cron.xml',
         'data/inbound_cron.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'stock_3pl_mainfreight/static/src/js/mf_kpi_dashboard.js',
+            'stock_3pl_mainfreight/static/src/xml/mf_kpi_dashboard.xml',
+        ],
+    },
     'demo': ['data/connector_mf_demo.xml'],
     'installable': True,
     'auto_install': False,
