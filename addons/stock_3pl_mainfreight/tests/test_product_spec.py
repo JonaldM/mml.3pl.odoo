@@ -65,10 +65,8 @@ class TestProductSpec(TransactionCase):
     def test_missing_default_code_raises(self):
         self.product.default_code = False
         from odoo.exceptions import ValidationError
-        from odoo.addons.stock_3pl_mainfreight.document.product_spec import ProductSpecDocument
-        doc = ProductSpecDocument(self.connector, self.env)
         with self.assertRaises(ValidationError):
-            doc.build_outbound(self.product)
+            self._build()
 
     def test_packaging_default_pack_columns_populated(self):
         """Default Pack columns should populate from packaging_ids[0]."""
@@ -90,3 +88,18 @@ class TestProductSpec(TransactionCase):
         reader = csv.DictReader(io.StringIO(csv_str))
         row = list(reader)[0]
         self.assertEqual(row['Warehouse ID'], self.connector.warehouse_code)
+
+    def test_batch_skips_products_without_default_code(self):
+        """Batch mode should skip products without default_code and still return valid rows."""
+        product2 = self.env['product.product'].create({
+            'name': 'No Code Product',
+            'type': 'product',
+        })
+        from odoo.addons.stock_3pl_mainfreight.document.product_spec import ProductSpecDocument
+        doc = ProductSpecDocument(self.connector, self.env)
+        csv_str = doc.build_outbound_batch(self.product | product2)
+        import csv, io
+        reader = csv.DictReader(io.StringIO(csv_str))
+        rows = list(reader)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['Product Code'], 'WIDGET001')

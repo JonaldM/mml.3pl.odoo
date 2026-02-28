@@ -1,8 +1,11 @@
 # addons/stock_3pl_mainfreight/document/product_spec.py
 import csv
 import io
+import logging
 from odoo.exceptions import ValidationError
 from odoo.addons.stock_3pl_core.models.document_base import AbstractDocument
+
+_logger = logging.getLogger(__name__)
 
 HEADERS = [
     'Product Code', 'Product Description 1', 'Product Description 2',
@@ -46,7 +49,8 @@ class ProductSpecDocument(AbstractDocument):
         writer.writeheader()
         for product in products:
             if not product.default_code:
-                continue  # Skip silently in batch
+                _logger.warning('MF product sync: skipping product id=%s (no default_code)', product.id)
+                continue
             writer.writerow(self._build_row(product))
         return output.getvalue()
 
