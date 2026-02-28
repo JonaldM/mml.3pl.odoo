@@ -5,8 +5,8 @@ from odoo import models, fields
 
 
 class ManualSyncWizard(models.TransientModel):
-    _name = 'threePL.manual_sync_wizard'
-    _description = 'Manual 3PL Sync Wizard (stub)'
+    _name = 'stock_3pl.manual_sync_wizard'
+    _description = 'Manual 3PL Sync Wizard'
 
     connector_id = fields.Many2one('3pl.connector', 'Connector', required=True)
     # Phase 2: add document type selector, record ref, dry_run toggle

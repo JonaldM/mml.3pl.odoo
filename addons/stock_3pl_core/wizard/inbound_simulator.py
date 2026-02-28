@@ -5,8 +5,8 @@ from odoo import models, fields
 
 
 class InboundSimulatorWizard(models.TransientModel):
-    _name = 'threePL.inbound_simulator'
-    _description = '3PL Inbound Simulator Wizard (stub)'
+    _name = 'stock_3pl.inbound_simulator'
+    _description = '3PL Inbound Simulator Wizard'
 
     connector_id = fields.Many2one('3pl.connector', 'Connector', required=True)
     payload = fields.Text('Raw Payload')

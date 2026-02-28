@@ -18,7 +18,7 @@
                 <sheet>
                     <!-- Smart button box -->
                     <div class="oe_button_box" name="button_box">
-                        <button name="%(action_3pl_message_all)d"
+                        <button name="%(stock_3pl_core.action_3pl_message_all)d"
                                 type="action"
                                 class="oe_stat_button"
                                 icon="fa-envelope"
