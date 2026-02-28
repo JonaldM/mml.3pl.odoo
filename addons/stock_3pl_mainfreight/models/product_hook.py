@@ -25,7 +25,7 @@ class ProductProductMF(models.Model):
         """Queue a product_spec message for all active MF connectors for this product."""
         self.ensure_one()
         connectors = self.env['3pl.connector'].search([
-            ('forwarder', '=', 'mainfreight'),
+            ('warehouse_partner', '=', 'mainfreight'),
             ('active', '=', True),
         ])
         for connector in connectors:

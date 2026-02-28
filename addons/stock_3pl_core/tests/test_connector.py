@@ -11,13 +11,13 @@ class TestConnector(TransactionCase):
         connector = self.env['3pl.connector'].create({
             'name': 'MF NZ Test',
             'warehouse_id': self.warehouse.id,
-            'forwarder': 'mainfreight',
+            'warehouse_partner': 'mainfreight',
             'transport': 'rest_api',
             'environment': 'test',
             'customer_id': '123456',
             'warehouse_code': '99',
         })
-        self.assertEqual(connector.forwarder, 'mainfreight')
+        self.assertEqual(connector.warehouse_partner, 'mainfreight')
         self.assertEqual(connector.environment, 'test')
         self.assertTrue(connector.active)
 
@@ -25,7 +25,7 @@ class TestConnector(TransactionCase):
         with self.assertRaises(Exception):
             self.env['3pl.connector'].create({
                 'name': 'Bad Connector',
-                'forwarder': 'mainfreight',
+                'warehouse_partner': 'mainfreight',
                 'transport': 'rest_api',
             })
 
@@ -33,7 +33,7 @@ class TestConnector(TransactionCase):
         connector = self.env['3pl.connector'].create({
             'name': 'MF NZ Test',
             'warehouse_id': self.warehouse.id,
-            'forwarder': 'mainfreight',
+            'warehouse_partner': 'mainfreight',
             'transport': 'sftp',
             'environment': 'test',
             'customer_id': '123456',
@@ -45,7 +45,7 @@ class TestConnector(TransactionCase):
         connector = self.env['3pl.connector'].create({
             'name': 'MF REST Test',
             'warehouse_id': self.warehouse.id,
-            'forwarder': 'mainfreight',
+            'warehouse_partner': 'mainfreight',
             'transport': 'rest_api',
             'environment': 'test',
             'customer_id': '123456',

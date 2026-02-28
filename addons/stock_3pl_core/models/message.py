@@ -62,7 +62,7 @@ class ThreePlMessage(models.Model):
     ref_id = fields.Integer('Source Record ID')
 
     # 3PL references
-    forwarder_ref = fields.Char('Forwarder Reference')
+    warehouse_partner_ref = fields.Char('Warehouse Partner Ref')
 
     # Idempotency / deduplication
     idempotency_key = fields.Char(index=True)

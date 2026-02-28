@@ -11,7 +11,7 @@ class TestRetryLogic(TransactionCase):
         self.connector = self.env['3pl.connector'].create({
             'name': 'Test',
             'warehouse_id': warehouse.id,
-            'forwarder': 'mainfreight',
+            'warehouse_partner': 'mainfreight',
             'transport': 'rest_api',
             'environment': 'test',
             'customer_id': '123456',

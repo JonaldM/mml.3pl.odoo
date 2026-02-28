@@ -39,7 +39,7 @@
                         <group string="General">
                             <field name="active"/>
                             <field name="warehouse_id"/>
-                            <field name="forwarder"/>
+                            <field name="warehouse_partner"/>
                             <field name="transport"/>
                             <field name="environment"/>
                             <field name="region"/>
@@ -105,7 +105,7 @@
             <tree string="3PL Connectors">
                 <field name="name"/>
                 <field name="warehouse_id"/>
-                <field name="forwarder"/>
+                <field name="warehouse_partner"/>
                 <field name="transport"/>
                 <field name="environment"/>
                 <field name="active"/>

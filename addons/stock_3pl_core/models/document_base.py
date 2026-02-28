@@ -57,17 +57,17 @@ class AbstractDocument(abc.ABC):
         return str(value)[:max_len]
 
 
-class FreightForwarderMixin:
-    """Mixin for document builders that support multiple freight forwarders.
+class WarehousePartnerMixin:
+    """Mixin for document builders that support multiple warehouse partners.
 
-    Register field mappings per forwarder via the FIELD_MAP class attribute:
+    Register field mappings per warehouse partner via the FIELD_MAP class attribute:
         FIELD_MAP = {'mainfreight': {'odoo_field': 'mf_field', ...}}
 
-    Use get_field_map(forwarder) to retrieve the mapping for the active forwarder.
+    Use get_field_map(warehouse_partner) to retrieve the mapping for the active warehouse partner.
     """
 
     FIELD_MAP = {}
 
-    def get_field_map(self, forwarder):
-        """Return the field mapping dict for the given forwarder, or {} if not registered."""
-        return self.FIELD_MAP.get(forwarder, {})
+    def get_field_map(self, warehouse_partner):
+        """Return the field mapping dict for the given warehouse partner, or {} if not registered."""
+        return self.FIELD_MAP.get(warehouse_partner, {})

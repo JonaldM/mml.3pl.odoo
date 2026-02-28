@@ -22,7 +22,7 @@ class SaleOrderMF(models.Model):
         self.ensure_one()
         connector = self.env['3pl.connector'].search([
             ('warehouse_id', '=', self.warehouse_id.id),
-            ('forwarder', '=', 'mainfreight'),
+            ('warehouse_partner', '=', 'mainfreight'),
             ('active', '=', True),
         ], limit=1)
         if not connector:

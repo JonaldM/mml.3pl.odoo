@@ -18,7 +18,7 @@
                 <field name="action"/>
                 <field name="state"/>
                 <field name="retry_count"/>
-                <field name="forwarder_ref"/>
+                <field name="warehouse_partner_ref"/>
             </tree>
         </field>
     </record>
@@ -53,7 +53,7 @@
                         </group>
                         <group string="Tracking">
                             <field name="retry_count"/>
-                            <field name="forwarder_ref"/>
+                            <field name="warehouse_partner_ref"/>
                             <field name="report_date"/>
                             <field name="sent_at"/>
                             <field name="acked_at"/>

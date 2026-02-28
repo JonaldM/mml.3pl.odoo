@@ -1,6 +1,6 @@
 from odoo import models, fields
 
-FORWARDER_SELECTION = [
+WAREHOUSE_PARTNER_SELECTION = [
     ('mainfreight', 'Mainfreight'),
 ]
 
@@ -23,7 +23,7 @@ class ThreePlConnector(models.Model):
     name = fields.Char(required=True)
     active = fields.Boolean(default=True)
     warehouse_id = fields.Many2one('stock.warehouse', required=True, ondelete='restrict')
-    forwarder = fields.Selection(FORWARDER_SELECTION, required=True)
+    warehouse_partner = fields.Selection(WAREHOUSE_PARTNER_SELECTION, string='Warehouse Partner', required=True)
     transport = fields.Selection(TRANSPORT_SELECTION, required=True)
     environment = fields.Selection(ENVIRONMENT_SELECTION, required=True, default='test')
     region = fields.Char(help='e.g. NZ, AU, US — used for international routing')
