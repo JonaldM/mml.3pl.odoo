@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- addons/stock_3pl_mainfreight/static/src/xml/mf_kpi_dashboard.xml -->
+<templates xml:space="preserve">
+
+<t t-name="stock_3pl_mainfreight.MfKpiDashboard" owl="1">
+    <div class="mf-kpi-dashboard o_action">
+
+        <!-- Loading / error states -->
+        <t t-if="state.loading">
+            <div class="o_loading text-center p-5">
+                <i class="fa fa-spinner fa-spin fa-2x"/>
+            </div>
+        </t>
+        <t t-elif="state.error">
+            <div class="alert alert-danger m-3" t-esc="state.error"/>
+        </t>
+
+        <t t-elif="state.summary and !state.summary.data_available">
+            <div class="alert alert-info m-4">
+                <strong>No data yet.</strong> The 3PL integration has not processed any orders.
+                KPI metrics will appear once orders start flowing through Mainfreight.
+            </div>
+        </t>
+
+        <t t-elif="state.summary">
+            <t t-set="s" t-value="state.summary"/>
+
+            <!-- Header bar -->
+            <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
+                <h4 class="mb-0">3PL Operations &#x2014; KPI Dashboard</h4>
+                <button class="btn btn-sm btn-outline-secondary" t-on-click="openEditTargets">
+                    <i class="fa fa-cog mr-1"/> Edit Targets
+                </button>
+            </div>
+
+            <!-- KPI cards -->
+            <div class="row g-3 p-3">
+
+                <!-- DIFOT — click → Order Pipeline -->
+                <div class="col-sm-6 col-lg-3" style="cursor:pointer" t-on-click="openOrderPipeline">
+                    <div t-attf-class="card h-100 mf-kpi-card #{ragClass(s.difot.rag)}">
+                        <div class="card-body text-center">
+                            <div class="mf-kpi-value" t-esc="formatPct(s.difot.value)"/>
+                            <div class="mf-kpi-label">DIFOT</div>
+                            <div class="mf-kpi-target text-muted small">
+                                Target: <t t-esc="s.targets.difot_target"/>%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IRA — click → Discrepancy screen -->
+                <div class="col-sm-6 col-lg-3" style="cursor:pointer" t-on-click="openDiscrepancy">
+                    <div t-attf-class="card h-100 mf-kpi-card #{ragClass(s.ira.rag)}">
+                        <div class="card-body text-center">
+                            <div class="mf-kpi-value" t-esc="formatPct(s.ira.value)"/>
+                            <div class="mf-kpi-label">IRA</div>
+                            <div class="mf-kpi-target text-muted small">
+                                Target: <t t-esc="s.targets.ira_target"/>%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Exception Rate — click → Exception Queue -->
+                <div class="col-sm-6 col-lg-3" style="cursor:pointer" t-on-click="openExceptionQueue">
+                    <div t-attf-class="card h-100 mf-kpi-card #{ragClass(s.exception_rate.rag)}">
+                        <div class="card-body text-center">
+                            <div class="mf-kpi-value" t-esc="formatPct(s.exception_rate.value)"/>
+                            <div class="mf-kpi-label">Exception Rate</div>
+                            <div class="mf-kpi-target text-muted small">
+                                Target: &lt;<t t-esc="s.targets.exception_rate_target"/>%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shrinkage — click → Discrepancy screen -->
+                <div class="col-sm-6 col-lg-3" style="cursor:pointer" t-on-click="openDiscrepancy">
+                    <div t-attf-class="card h-100 mf-kpi-card #{ragClass(s.shrinkage.rag)}">
+                        <div class="card-body text-center">
+                            <div class="mf-kpi-value" t-esc="formatPct(s.shrinkage.value)"/>
+                            <div class="mf-kpi-label">Shrinkage (12M)</div>
+                            <div class="mf-kpi-target text-muted small">
+                                Target: &lt;<t t-esc="s.targets.shrinkage_target"/>%/yr
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- In Flight — click → Order Pipeline -->
+                <div class="col-sm-6 col-lg-3">
+                    <div t-attf-class="card h-100 mf-kpi-card mf-kpi-neutral"
+                         style="cursor:pointer" t-on-click="openOrderPipeline">
+                        <div class="card-body text-center">
+                            <div class="mf-kpi-value" t-esc="formatCount(s.in_flight.value)"/>
+                            <div class="mf-kpi-label">In Flight</div>
+                            <div class="mf-kpi-target text-muted small">Orders sent &#x2192; dispatched</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Today summary strip -->
+            <div class="mf-today-strip d-flex gap-4 px-3 py-2 border-top border-bottom bg-light">
+                <span class="text-muted small mr-2 align-self-center">Today:</span>
+                <span><strong t-esc="s.today.sent"/> sent</span>
+                <span><strong t-esc="s.today.received"/> received</span>
+                <span><strong t-esc="s.today.delivered"/> delivered</span>
+                <span t-attf-class="#{s.today.exceptions > 0 ? 'text-danger fw-bold' : ''}">
+                    <strong t-esc="s.today.exceptions"/> exceptions
+                </span>
+            </div>
+
+            <!-- Trend graphs — link to native graph views -->
+            <div class="row p-3">
+                <div class="col-12">
+                    <p class="text-muted small">
+                        For trend charts, use the
+                        <a t-on-click.prevent="openOrderPipeline" href="#">Order Pipeline</a>
+                        graph view.
+                    </p>
+                </div>
+            </div>
+
+        </t>
+    </div>
+</t>
+
+</templates>

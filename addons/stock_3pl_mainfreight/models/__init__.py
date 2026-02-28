@@ -4,3 +4,5 @@ from . import split_engine
 from . import push_cron
 from . import tracking_cron
 from . import inbound_cron
+from . import kpi_dashboard
+from . import soh_discrepancy

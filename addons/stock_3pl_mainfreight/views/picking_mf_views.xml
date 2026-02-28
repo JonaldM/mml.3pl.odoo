@@ -33,6 +33,8 @@
                             <field name="x_mf_status"/>
                             <field name="x_mf_routed_by"/>
                             <field name="x_mf_cross_border"/>
+                            <field name="x_mf_assigned_to"
+                                   attrs="{'invisible': [('x_mf_status', 'not in', ['mf_exception', 'mf_resolved'])]}"/>
                         </group>
                         <group>
                             <field name="x_mf_connote"

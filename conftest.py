@@ -95,6 +95,21 @@ def _install_odoo_stubs():
         _name = None
         _fields_meta = {}
 
+        def write(self, vals):
+            pass
+
+        def ensure_one(self):
+            pass
+
+        def search(self, domain, **kwargs):
+            return []
+
+        def sudo(self):
+            return self
+
+        def create(self, vals):
+            pass
+
     class AbstractModel(Model):
         pass
 
