@@ -19,15 +19,29 @@ if 'requests' not in sys.modules:
     _requests_stub = types.ModuleType('requests')
     _requests_stub.get = MagicMock()
 
-    class _HTTPError(Exception):
+    class _RequestException(Exception):
         pass
 
-    class _RequestException(Exception):
+    class _HTTPError(_RequestException):
         pass
 
     _requests_stub.HTTPError = _HTTPError
     _requests_stub.RequestException = _RequestException
+
+    # requests.exceptions submodule — production code references it directly
+    _requests_exc_stub = types.ModuleType('requests.exceptions')
+    _requests_exc_stub.RequestException = _RequestException
+    _requests_exc_stub.HTTPError = _HTTPError
+    _requests_stub.exceptions = _requests_exc_stub
+
     sys.modules['requests'] = _requests_stub
+    sys.modules['requests.exceptions'] = _requests_exc_stub
+else:
+    # Real requests is installed — ensure requests.exceptions is accessible
+    import requests as _requests_real
+    if not hasattr(_requests_real, 'exceptions'):
+        import importlib as _il
+        _requests_real.exceptions = _il.import_module('requests.exceptions')
 
 # ---------------------------------------------------------------------------
 # Stub the RestTransport parent so mainfreight_rest.py can be loaded
@@ -310,14 +324,16 @@ class TestGetTrackingStatusNetworkError(unittest.TestCase):
 
     def test_connection_error_returns_empty_dict(self):
         transport = MainfreightRestTransport(_FakeConnector())
-        with patch.object(sys.modules['requests'], 'get', side_effect=Exception('connection refused')):
+        exc_cls = sys.modules['requests'].exceptions.RequestException
+        with patch.object(sys.modules['requests'], 'get', side_effect=exc_cls('connection refused')):
             result = transport.get_tracking_status('CN001')
         self.assertEqual(result, {})
 
     def test_http_error_returns_empty_dict(self):
         transport = MainfreightRestTransport(_FakeConnector())
+        exc_cls = sys.modules['requests'].exceptions.RequestException
         mock_resp = MagicMock()
-        mock_resp.raise_for_status.side_effect = Exception('404 Not Found')
+        mock_resp.raise_for_status.side_effect = exc_cls('404 Not Found')
         with patch.object(sys.modules['requests'], 'get', return_value=mock_resp):
             result = transport.get_tracking_status('CN001')
         self.assertEqual(result, {})

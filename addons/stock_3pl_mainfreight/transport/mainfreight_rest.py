@@ -49,8 +49,7 @@ class MainfreightRestTransport(RestTransport):
         return self.poll(path=f'{self._get_base_url()}/StockOnHand')
 
     def _get_tracking_base_url(self):
-        env = getattr(self.connector, 'environment', 'test') or 'test'
-        return MF_TRACKING_ENDPOINTS.get(env, MF_TRACKING_ENDPOINTS['test'])
+        return MF_TRACKING_ENDPOINTS.get(self.connector.environment, MF_TRACKING_ENDPOINTS['test'])
 
     def get_tracking_status(self, connote):
         """Poll the MF Tracking API for a given connote number.
@@ -58,18 +57,23 @@ class MainfreightRestTransport(RestTransport):
         Returns a dict with keys: status, pod_url, signed_by, delivered_at.
         Returns {} on any error or if the MF status string is not recognised.
         """
+        secret = self.connector.mf_tracking_secret or ''
+        url = f'{self._get_tracking_base_url()}/Tracking/{connote}'
         try:
-            secret = getattr(self.connector, 'mf_tracking_secret', None) or ''
-            url = f'{self._get_tracking_base_url()}/Tracking/{connote}'
             response = requests.get(
                 url,
                 headers={'Authorization': f'Bearer {secret}'},
                 timeout=30,
             )
             response.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            _logger.error('get_tracking_status: HTTP request failed for %s: %s', connote, exc)
+            return {}
+
+        try:
             data = response.json()
         except Exception as exc:
-            _logger.warning('get_tracking_status: request failed for %s: %s', connote, exc)
+            _logger.warning('get_tracking_status: could not parse JSON response for %s: %s', connote, exc)
             return {}
 
         mf_status = data.get('Status')

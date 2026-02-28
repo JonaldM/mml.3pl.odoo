@@ -84,11 +84,11 @@ class MFTrackingCron(models.AbstractModel):
             write_vals['x_mf_status'] = new_status
 
         pod_url = result.get('pod_url')
-        if pod_url is not None:
+        if pod_url:
             write_vals['x_mf_pod_url'] = pod_url
 
         signed_by = result.get('signed_by')
-        if signed_by is not None:
+        if signed_by:
             write_vals['x_mf_signed_by'] = signed_by
 
         delivered_at = result.get('delivered_at')
