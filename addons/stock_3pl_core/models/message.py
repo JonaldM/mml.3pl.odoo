@@ -75,6 +75,9 @@ class ThreePlMessage(models.Model):
     sent_at = fields.Datetime('Sent At', readonly=True)
     acked_at = fields.Datetime('Acknowledged At', readonly=True)
 
+    # PostgreSQL treats each NULL as distinct, so these constraints only enforce
+    # uniqueness for non-null keys. Messages without a key/hash are intentionally
+    # exempt — they are not subject to deduplication.
     _sql_constraints = [
         (
             'unique_idempotency_key',
@@ -152,7 +155,10 @@ class ThreePlMessage(models.Model):
     # --- Idempotency helpers ---
 
     def is_stale(self):
-        """Return True if this inbound inventory report is older than the last applied."""
+        """Return True if this inventory report is not newer than the last applied SOH date.
+
+        Same-day reports are also considered stale — the snapshot has already been processed.
+        """
         self.ensure_one()
         if not self.connector_id.last_soh_applied_at or not self.report_date:
             return False

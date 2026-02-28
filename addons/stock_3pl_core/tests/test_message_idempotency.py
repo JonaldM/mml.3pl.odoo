@@ -1,5 +1,6 @@
 # addons/stock_3pl_core/tests/test_message_idempotency.py
 import hashlib
+from datetime import date, timedelta
 from odoo.tests import TransactionCase, tagged
 from odoo import fields as odoo_fields
 
@@ -33,13 +34,14 @@ class TestMessageIdempotency(TransactionCase):
             'idempotency_key': key,
         })
         with self.assertRaises(Exception):
-            self.env['3pl.message'].create({
-                'connector_id': self.connector.id,
-                'direction': 'outbound',
-                'document_type': 'sales_order',
-                'action': 'create',
-                'idempotency_key': key,
-            })
+            with self.env.cr.savepoint():
+                self.env['3pl.message'].create({
+                    'connector_id': self.connector.id,
+                    'direction': 'outbound',
+                    'document_type': 'sales_order',
+                    'action': 'create',
+                    'idempotency_key': key,
+                })
 
     def test_duplicate_inbound_blocked_by_source_hash(self):
         raw = '<SCH>test</SCH>'
@@ -51,15 +53,15 @@ class TestMessageIdempotency(TransactionCase):
             'source_hash': h,
         })
         with self.assertRaises(Exception):
-            self.env['3pl.message'].create({
-                'connector_id': self.connector.id,
-                'direction': 'inbound',
-                'document_type': 'so_confirmation',
-                'source_hash': h,
-            })
+            with self.env.cr.savepoint():
+                self.env['3pl.message'].create({
+                    'connector_id': self.connector.id,
+                    'direction': 'inbound',
+                    'document_type': 'so_confirmation',
+                    'source_hash': h,
+                })
 
     def test_stale_soh_report_rejected(self):
-        from datetime import date, timedelta
         self.connector.last_soh_applied_at = odoo_fields.Datetime.now()
         yesterday = date.today() - timedelta(days=1)
         msg = self.env['3pl.message'].create({
@@ -72,7 +74,6 @@ class TestMessageIdempotency(TransactionCase):
         self.assertTrue(result)
 
     def test_fresh_soh_report_not_stale(self):
-        from datetime import date, timedelta
         self.connector.last_soh_applied_at = odoo_fields.Datetime.now() - timedelta(days=2)
         today = date.today()
         msg = self.env['3pl.message'].create({
