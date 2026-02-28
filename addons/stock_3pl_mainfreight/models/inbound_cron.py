@@ -16,9 +16,10 @@ class MFInboundCron(models.AbstractModel):
     AbstractModel — no stored fields, no database table.
     Invoked via ir.cron as: self.env['mf.inbound.cron']._run_mf_inbound()
 
-    Two responsibilities:
-      1. Poll active MF connectors for SOH inventory report files and apply them.
-      2. Flag stale mf_sent pickings (no connote after threshold hours) as mf_exception.
+    Three responsibilities:
+      1. Poll active MF connectors for SOH/ACK files and dispatch to the correct handler.
+      2. Process 3pl.message records in state 'received' (XML/CSV queue path).
+      3. Flag stale mf_sent pickings (no connote after threshold hours) as mf_exception.
     """
     _name = 'mf.inbound.cron'
     _description = 'MF Inbound Cron'
