@@ -6,6 +6,9 @@ from odoo.addons.stock_3pl_mainfreight.utils.haversine import sort_warehouses_by
 
 _logger = logging.getLogger(__name__)
 
+# Log any discrepancy between Odoo quant figures and MF SOH API figures.
+_SOH_DRIFT_LOG_THRESHOLD = 0
+
 
 class MFRouteEngine(models.AbstractModel):
     """Service model for Mainfreight warehouse routing decisions.
@@ -135,8 +138,11 @@ class MFRouteEngine(models.AbstractModel):
     def _check_stock(self, warehouse, lines):
         """Return {product: available_qty} at the warehouse stock location.
 
-        Uses Odoo stock.quant (internal stock). Phase 2 will add MF SOH API
-        cross-check if drift between Odoo and MF becomes a problem.
+        Always computes Odoo stock.quant quantities first. If the connector
+        for this warehouse has ``x_mf_use_api_soh = True``, also calls the
+        MF SOH API and uses its figures when drift is detected (any non-zero
+        difference). Falls back to Odoo quantities on any API error or when
+        no connector is configured — routing is never blocked by the API.
         """
         location = warehouse.lot_stock_id
         result = {}
@@ -146,6 +152,57 @@ class MFRouteEngine(models.AbstractModel):
                 ('location_id', 'child_of', location.id),
             ])
             result[product] = sum(quants.mapped('quantity'))
+
+        # Optional MF SOH API cross-check ----------------------------------
+        connector = self.env['3pl.connector'].search(
+            [('warehouse_id', '=', warehouse.id)], limit=1
+        )
+        if not connector:
+            return result
+        if not connector.x_mf_use_api_soh:
+            return result
+
+        try:
+            transport = connector.get_transport()
+            soh_records = transport.get_stock_on_hand()
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning(
+                '_check_stock: SOH API call failed for warehouse %s — '
+                'falling back to Odoo quantities. Error: %s',
+                warehouse.name, exc,
+            )
+            return result
+
+        if not soh_records:
+            _logger.warning(
+                '_check_stock: SOH API returned empty response for warehouse %s — '
+                'falling back to Odoo quantities.',
+                warehouse.name,
+            )
+            return result
+
+        # Build a lookup: ProductCode → QuantityAvailable
+        soh_by_code = {
+            rec['ProductCode']: rec.get('QuantityAvailable', 0.0)
+            for rec in soh_records
+            if isinstance(rec, dict) and rec.get('ProductCode')
+        }
+
+        for product in list(result.keys()):
+            code = product.default_code
+            if not code or code not in soh_by_code:
+                continue
+            mf_qty = float(soh_by_code[code])
+            odoo_qty = result[product]
+            drift = abs(mf_qty - odoo_qty)
+            if drift > _SOH_DRIFT_LOG_THRESHOLD:
+                _logger.warning(
+                    '_check_stock: SOH drift detected for product %s (code=%s) '
+                    'at warehouse %s — Odoo qty=%.2f, MF qty=%.2f. Using MF figure.',
+                    product.name, code, warehouse.name, odoo_qty, mf_qty,
+                )
+                result[product] = mf_qty
+
         return result
 
     @api.model

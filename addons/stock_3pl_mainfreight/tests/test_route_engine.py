@@ -290,6 +290,36 @@ class TestRouteOrderNoLatLng(unittest.TestCase):
         self.assertEqual(result[0]['warehouse'], wh1)
 
 
+def _make_per_model_env(quant_mock, connector_mock=None):
+    """Build a MagicMock env that returns different child mocks per model key.
+
+    MagicMock.__getitem__ returns the SAME child mock for every key, which
+    breaks tests that use both 'stock.quant' and '3pl.connector' lookups.
+    This helper wires separate mocks per model name via a side_effect on
+    __getitem__.
+    """
+    quant_model = MagicMock()
+    quant_model.search = quant_mock
+
+    connector_model = MagicMock()
+    if connector_mock is None:
+        # Default: connector with SOH API disabled so stock tests stay isolated
+        disabled_connector = MagicMock()
+        disabled_connector.x_mf_use_api_soh = False
+        connector_model.search.return_value = disabled_connector
+    else:
+        connector_model.search = connector_mock
+
+    _model_map = {
+        'stock.quant': quant_model,
+        '3pl.connector': connector_model,
+    }
+
+    env = MagicMock()
+    env.__getitem__.side_effect = lambda key: _model_map.get(key, MagicMock())
+    return env, quant_model, connector_model
+
+
 class TestCheckStock(unittest.TestCase):
     """_check_stock sums quant quantities at the warehouse stock location."""
 
@@ -302,9 +332,10 @@ class TestCheckStock(unittest.TestCase):
         wh = _make_warehouse('WH1', lat=-36.0, lng=174.0)
         quants = self._make_quants([10.0, 5.0])
 
+        quant_search = MagicMock(return_value=quants)
+        env, quant_model, _ = _make_per_model_env(quant_search)
+
         engine = object.__new__(MFRouteEngine)
-        env = MagicMock()
-        env['stock.quant'].search.return_value = quants
         engine.env = env
 
         prod = _make_product()
@@ -318,15 +349,16 @@ class TestCheckStock(unittest.TestCase):
         wh.lot_stock_id.id = 42
         quants = self._make_quants([])
 
+        quant_search = MagicMock(return_value=quants)
+        env, quant_model, _ = _make_per_model_env(quant_search)
+
         engine = object.__new__(MFRouteEngine)
-        env = MagicMock()
-        env['stock.quant'].search.return_value = quants
         engine.env = env
 
         prod = _make_product()
         engine._check_stock(wh, [(prod, 1.0)])
 
-        call_args = env['stock.quant'].search.call_args[0][0]
+        call_args = quant_model.search.call_args[0][0]
         # Domain must contain ('location_id', 'child_of', 42)
         self.assertIn(('location_id', 'child_of', 42), call_args)
 
@@ -334,9 +366,10 @@ class TestCheckStock(unittest.TestCase):
         wh = _make_warehouse()
         quants = self._make_quants([])
 
+        quant_search = MagicMock(return_value=quants)
+        env, _, _ = _make_per_model_env(quant_search)
+
         engine = object.__new__(MFRouteEngine)
-        env = MagicMock()
-        env['stock.quant'].search.return_value = quants
         engine.env = env
 
         prod = _make_product()
@@ -347,22 +380,23 @@ class TestCheckStock(unittest.TestCase):
         wh = _make_warehouse()
         call_count = {'n': 0}
 
-        def side_effect(domain):
+        def quant_side_effect(domain):
             q = MagicMock()
             q.mapped.return_value = [float(call_count['n'] + 1) * 10]
             call_count['n'] += 1
             return q
 
+        quant_search = MagicMock(side_effect=quant_side_effect)
+        env, quant_model, _ = _make_per_model_env(quant_search)
+
         engine = object.__new__(MFRouteEngine)
-        env = MagicMock()
-        env['stock.quant'].search.side_effect = side_effect
         engine.env = env
 
         prod_a = _make_product('A')
         prod_b = _make_product('B')
         result = engine._check_stock(wh, [(prod_a, 1.0), (prod_b, 1.0)])
 
-        self.assertEqual(env['stock.quant'].search.call_count, 2)
+        self.assertEqual(quant_model.search.call_count, 2)
         self.assertEqual(result[prod_a], 10.0)
         self.assertEqual(result[prod_b], 20.0)
 
@@ -553,6 +587,152 @@ class TestRouteOrderEmptyLines(unittest.TestCase):
 
         result = engine.route_order(order)
         self.assertEqual(result, [])
+
+
+_ROUTE_ENGINE_LOGGER = 'stock_3pl_mainfreight.models.route_engine'
+
+
+class TestSOHApiCrossCheck(unittest.TestCase):
+    """_check_stock optionally cross-checks Odoo stock against the MF SOH API."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _make_engine_with_connector(self, connector=None):
+        """Return an MFRouteEngine whose env models are properly separated.
+
+        Uses _make_per_model_env so that 'stock.quant' and '3pl.connector'
+        return independent mock objects — MagicMock.__getitem__ returns the
+        same child for any key by default, which would break these tests.
+        """
+        engine = object.__new__(MFRouteEngine)
+
+        # stock.quant always returns qty 10
+        quants = MagicMock()
+        quants.mapped.return_value = [10.0]
+        quant_search = MagicMock(return_value=quants)
+
+        # 3pl.connector search returns the provided connector
+        connector_search = MagicMock(return_value=connector)
+
+        env, _quant_model, _connector_model = _make_per_model_env(
+            quant_search, connector_search
+        )
+        engine.env = env
+        return engine
+
+    def _make_connector(self, use_api_soh=False, soh_response=None, raise_on_call=False):
+        """Return a mock connector whose transport.get_stock_on_hand() behaves as specified."""
+        connector = MagicMock()
+        connector.x_mf_use_api_soh = use_api_soh
+
+        transport = MagicMock()
+        if raise_on_call:
+            transport.get_stock_on_hand.side_effect = RuntimeError('network error')
+        else:
+            transport.get_stock_on_hand.return_value = soh_response if soh_response is not None else []
+        connector.get_transport.return_value = transport
+
+        return connector
+
+    def _make_product_with_code(self, name='Widget', code='WIDGET-01'):
+        p = MagicMock()
+        p.name = name
+        p.default_code = code
+        p.type = 'product'
+        p.id = id(p)
+        return p
+
+    # ------------------------------------------------------------------
+    # Tests
+    # ------------------------------------------------------------------
+
+    def test_soh_api_disabled_skips_api_call(self):
+        """When x_mf_use_api_soh is False, get_stock_on_hand() is never called."""
+        connector = self._make_connector(use_api_soh=False)
+        engine = self._make_engine_with_connector(connector)
+        wh = _make_warehouse('WH1')
+        prod = self._make_product_with_code()
+
+        engine._check_stock(wh, [(prod, 5.0)])
+
+        connector.get_transport.assert_not_called()
+
+    def test_soh_api_enabled_uses_mf_quantity_on_drift(self):
+        """MF qty differs from Odoo qty → method returns MF figure, warning logged."""
+        # Odoo quant = 10 (from _make_engine_with_connector helper)
+        # MF SOH = 5  → drift = 5, use MF figure
+        soh_response = [{'ProductCode': 'WIDGET-01', 'QuantityAvailable': 5}]
+        connector = self._make_connector(use_api_soh=True, soh_response=soh_response)
+        engine = self._make_engine_with_connector(connector)
+        wh = _make_warehouse('WH1')
+        prod = self._make_product_with_code(code='WIDGET-01')
+
+        with self.assertLogs(_ROUTE_ENGINE_LOGGER, level='WARNING') as cm:
+            result = engine._check_stock(wh, [(prod, 5.0)])
+
+        self.assertEqual(result[prod], 5.0)
+        self.assertTrue(any('drift' in line.lower() for line in cm.output))
+
+    def test_soh_api_enabled_no_drift_uses_odoo_quantity(self):
+        """When MF qty matches Odoo qty exactly, no warning is logged and Odoo figure is kept."""
+        # Odoo quant = 10, MF SOH = 10 → no drift
+        soh_response = [{'ProductCode': 'SKU-42', 'QuantityAvailable': 10}]
+        connector = self._make_connector(use_api_soh=True, soh_response=soh_response)
+        engine = self._make_engine_with_connector(connector)
+        wh = _make_warehouse('WH1')
+        prod = self._make_product_with_code(code='SKU-42')
+
+        # assertNoLogs is Python 3.10+; use assertRaises on assertLogs for compat
+        with self.assertRaises(AssertionError):
+            with self.assertLogs(_ROUTE_ENGINE_LOGGER, level='WARNING'):
+                engine._check_stock(wh, [(prod, 10.0)])
+
+        # Re-run without assertLogs to capture the result
+        result = engine._check_stock(wh, [(prod, 10.0)])
+        self.assertEqual(result[prod], 10.0)
+
+    def test_soh_api_returns_empty_falls_back_to_odoo(self):
+        """API returns [] → warning logged, falls back to Odoo quantities, no exception raised."""
+        connector = self._make_connector(use_api_soh=True, soh_response=[])
+        engine = self._make_engine_with_connector(connector)
+        wh = _make_warehouse('WH1')
+        prod = self._make_product_with_code()
+
+        with self.assertLogs(_ROUTE_ENGINE_LOGGER, level='WARNING') as cm:
+            result = engine._check_stock(wh, [(prod, 5.0)])
+
+        # Falls back to Odoo quantity (10.0)
+        self.assertEqual(result[prod], 10.0)
+        self.assertTrue(any('empty' in line.lower() for line in cm.output))
+
+    def test_soh_api_call_raises_falls_back_to_odoo(self):
+        """API raises an exception → warning logged, falls back to Odoo, routing continues."""
+        connector = self._make_connector(use_api_soh=True, raise_on_call=True)
+        engine = self._make_engine_with_connector(connector)
+        wh = _make_warehouse('WH1')
+        prod = self._make_product_with_code()
+
+        with self.assertLogs(_ROUTE_ENGINE_LOGGER, level='WARNING') as cm:
+            result = engine._check_stock(wh, [(prod, 5.0)])
+
+        # Falls back to Odoo quantity (10.0)
+        self.assertEqual(result[prod], 10.0)
+        self.assertTrue(any('falling back' in line.lower() for line in cm.output))
+
+    def test_no_connector_for_warehouse_skips_api(self):
+        """No 3pl.connector found for warehouse → skip API, use Odoo quantities."""
+        # Returning None (falsy) simulates search() finding no connector record
+        engine = self._make_engine_with_connector(connector=None)
+        wh = _make_warehouse('WH-NOCONN')
+        prod = self._make_product_with_code()
+
+        # Should not raise; no transport call is made
+        result = engine._check_stock(wh, [(prod, 5.0)])
+
+        # Result is from Odoo quants (10.0) — connector was falsy so API skipped
+        self.assertEqual(result[prod], 10.0)
 
 
 if __name__ == '__main__':

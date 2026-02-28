@@ -53,6 +53,12 @@ class ThreePlConnector(models.Model):
 
     # SOH guard
     last_soh_applied_at = fields.Datetime('Last SOH Applied At', readonly=True)
+    x_mf_use_api_soh = fields.Boolean(
+        'Use MF SOH API for Routing',
+        default=False,
+        help='When enabled, the routing engine cross-checks Odoo stock against the MF SOH API. '
+             'MF figures are used if drift exceeds the threshold.',
+    )
 
     message_ids = fields.One2many('3pl.message', 'connector_id', 'Messages')
     message_count = fields.Integer(compute='_compute_message_count')
