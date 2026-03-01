@@ -12,6 +12,7 @@
                         <field name="mf_label_secret" password="True"/>
                         <field name="mf_rating_secret" password="True"/>
                         <field name="mf_tracking_secret" password="True"/>
+                        <field name="mf_region" placeholder="ANZ"/>
                     </group>
                 </page>
             </xpath>

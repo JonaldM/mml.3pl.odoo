@@ -30,6 +30,13 @@ class ThreePlConnectorMF(models.Model):
     mf_label_secret = fields.Char('Label API Secret', password=True, groups='stock.group_stock_manager')
     mf_rating_secret = fields.Char('Rating API Secret', password=True, groups='stock.group_stock_manager')
     mf_tracking_secret = fields.Char('Tracking API Secret', password=True, groups='stock.group_stock_manager')
+    mf_region = fields.Char(
+        'MF Region',
+        default='ANZ',
+        help='Warehousing API region parameter. Valid values: ANZ, EU, AMERICAS. '
+             'Default ANZ covers New Zealand and Australia. '
+             'Confirm exact value with Mainfreight before going live.',
+    )
 
     @api.model
     def create(self, vals):
