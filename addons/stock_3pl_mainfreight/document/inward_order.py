@@ -15,6 +15,10 @@ class InwardOrderDocument(AbstractDocument):
 
         action: 'create' or 'update'
         """
+        if action not in ('create', 'update'):
+            raise ValueError(f"InwardOrderDocument.build_outbound: invalid action {action!r}")
+        _logger.debug('Building InwardOrder XML for booking %s (action=%s)', booking.name, action)
+
         po        = booking.purchase_order_id
         warehouse = (po.picking_type_id.warehouse_id if po and po.picking_type_id else None)
         wh_partner = warehouse.partner_id if warehouse else None
@@ -46,6 +50,9 @@ class InwardOrderDocument(AbstractDocument):
         # ETA
         if booking.eta:
             self._add(root, 'ExpectedArrival', booking.eta.strftime('%Y-%m-%d'))
+            # NOTE: booking.eta is stored as UTC. Mainfreight interprets ExpectedArrival
+            # as a local date; for NZ warehouses (UTC+12/13) the UTC date may be one day
+            # early. Accepted as-is; adjust if Mainfreight reports date mismatches.
 
         # Transport
         tr_el = etree.SubElement(root, 'Transport')
@@ -58,6 +65,9 @@ class InwardOrderDocument(AbstractDocument):
         lines_el = etree.SubElement(root, 'Lines')
         for line in (po.order_line if po else []):
             product = line.product_id
+            if not product:
+                _logger.warning('inward_order: PO line %s has no product — skipping', line.id)
+                continue
             line_el = etree.SubElement(lines_el, 'Line')
             self._add(line_el, 'ProductCode', product.default_code or '', max_len=40)
             self._add(line_el, 'Description', product.name or '',         max_len=100)
@@ -71,11 +81,11 @@ class InwardOrderDocument(AbstractDocument):
 
     def _add(self, parent, tag, value, max_len=None):
         el = etree.SubElement(parent, tag)
-        el.text = self.truncate(value, max_len) if max_len else str(value)
+        el.text = self.truncate(value, max_len) if max_len else (str(value) if value is not None else '')
 
     def get_filename(self, booking):
         po_name = booking.purchase_order_id.name if booking.purchase_order_id else booking.name
-        return f'inward_order_{po_name}.xml'
+        return f'inward_order_{po_name.replace("/", "_")}.xml'
 
     def get_idempotency_key(self, booking):
         po_name = booking.purchase_order_id.name if booking.purchase_order_id else str(booking.id)

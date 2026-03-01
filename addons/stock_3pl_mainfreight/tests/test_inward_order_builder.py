@@ -44,7 +44,10 @@ class TestInwardOrderBuilder(TransactionCase):
         nzd = cls.env['res.currency'].search([('name', '=', 'NZD')], limit=1) \
               or cls.env.company.currency_id
         cls.booking = cls.env['freight.booking'].create({
-            'carrier_id': cls.env['delivery.carrier'].search([], limit=1).id,
+            'carrier_id': cls.env['delivery.carrier'].create({
+                'name': 'IO Test Carrier',
+                'product_id': cls.env['product.product'].search([], limit=1).id,
+            }).id,
             'currency_id': nzd.id,
             'carrier_booking_id': 'DSVBK_IO_001',
             'vessel_name': 'MSC Oscar',
@@ -89,11 +92,12 @@ class TestInwardOrderBuilder(TransactionCase):
         self.assertEqual(transport.findtext('Vessel'), 'MSC Oscar')
 
     def test_tba_vessel_when_empty(self):
+        self.addCleanup(setattr, self.booking, 'vessel_name', 'MSC Oscar')
         self.booking.vessel_name = ''
         xml = self._doc().build_outbound(self.booking, action='create')
         root = etree.fromstring(xml.encode())
         self.assertEqual(root.find('Transport').findtext('Vessel'), 'TBA')
-        self.booking.vessel_name = 'MSC Oscar'  # restore
+        # no manual restore needed — addCleanup handles it
 
     def test_po_lines_in_xml(self):
         xml = self._doc().build_outbound(self.booking, action='create')
