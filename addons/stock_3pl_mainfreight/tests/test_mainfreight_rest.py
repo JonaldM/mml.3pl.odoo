@@ -42,7 +42,8 @@ def _stub_odoo_for_transport():
     sys.modules['odoo.addons.stock_3pl_core.transport'] = core_transport_pkg
     sys.modules['odoo.addons.stock_3pl_core.transport.rest_api'] = core_rest_mod
 
-    # mainfreight_rest.py no longer imports requests directly; no stub needed.
+    # requests is imported by mainfreight_rest.py (used in get_tracking_status);
+    # tests mock at method level instead of patching the module.
 
 
 _stub_odoo_for_transport()
