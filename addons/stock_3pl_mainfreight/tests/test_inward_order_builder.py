@@ -110,3 +110,22 @@ class TestInwardOrderBuilder(TransactionCase):
         xml = self._doc().build_outbound(self.booking, action='create')
         # Must parse without error
         etree.fromstring(xml.encode())
+
+    def test_build_delete_ref_returns_po_name(self):
+        doc = self._doc()
+        ref = doc.build_delete_ref(self.booking)
+        self.assertEqual(ref, self.po.name)
+
+    def test_build_delete_ref_falls_back_to_booking_name_when_no_po(self):
+        """If booking has no purchase_order_id, use booking.name as fallback."""
+        from odoo.addons.stock_3pl_mainfreight.document.inward_order import InwardOrderDocument
+        nzd = self.env['res.currency'].search([('name', '=', 'NZD')], limit=1) \
+              or self.env.company.currency_id
+        bare_booking = self.env['freight.booking'].create({
+            'name': 'FB-NOPO',
+            'carrier_id': self.env['delivery.carrier'].search([], limit=1).id,
+            'currency_id': nzd.id,
+        })
+        doc = InwardOrderDocument(self.connector, self.env)
+        ref = doc.build_delete_ref(bare_booking)
+        self.assertEqual(ref, 'FB-NOPO')

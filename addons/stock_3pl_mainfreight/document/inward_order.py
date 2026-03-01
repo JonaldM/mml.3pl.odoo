@@ -90,3 +90,7 @@ class InwardOrderDocument(AbstractDocument):
     def get_idempotency_key(self, booking):
         po_name = booking.purchase_order_id.name if booking.purchase_order_id else str(booking.id)
         return self.make_idempotency_key(self.connector.id, self.document_type, po_name)
+
+    def build_delete_ref(self, booking):
+        """Return the inward order reference used in the MF DELETE /Inward/{ref} URL path."""
+        return booking.purchase_order_id.name if booking.purchase_order_id else booking.name
