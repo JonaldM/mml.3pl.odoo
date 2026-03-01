@@ -27,8 +27,19 @@ class SOConfirmationDocument(AbstractDocument):
         raise NotImplementedError('SO Confirmation is inbound-only')
 
     def parse_inbound(self, payload):
-        """Parse MF SO Confirmation XML (SCH + SCL) into a structured dict."""
+        """Parse MF SO Confirmation into a normalised dict.
+
+        Detects schema automatically:
+        - SCH/SCL XML (PDF spec): root tag SOConfirmation with nested SCH element
+        - Webhook-style XML (public API): root tag orderConfirmation with camelCase elements
+        """
         root = etree.fromstring(payload.encode('utf-8'), _XML_PARSER)
+        if root.find('SCH') is not None or root.tag in ('SOConfirmation', 'SCH'):
+            return self._parse_sch_scl(root)
+        return self._parse_webhook_style(root)
+
+    def _parse_sch_scl(self, root):
+        """Original PDF-spec parser: SCH header + SCL lines."""
         sch = root.find('SCH') or root
         lines = []
         for scl in sch.findall('Lines/SCL'):
@@ -43,6 +54,41 @@ class SOConfirmationDocument(AbstractDocument):
             'carrier_name': sch.findtext('CarrierName', '').strip(),
             'finalised_date': self._parse_date(sch.findtext('FinalisedDate', '')),
             'eta_date': self._parse_date(sch.findtext('ETADate', '')),
+            'lines': lines,
+        }
+
+    def _parse_webhook_style(self, root):
+        """Webhook/public-API schema: camelCase elements, richer structure.
+
+        customerOrderReference is the Odoo SO name (maps to 'reference').
+        orderReference is the MF internal reference — used as fallback only.
+        TODO: expand field coverage when webhook is activated on cloud hosting.
+        """
+        lines = []
+        for line_el in root.findall('.//orderConfirmationLine'):
+            lines.append({
+                'product_code': line_el.findtext('productCode', '').strip(),
+                'qty_done': float(line_el.findtext('unitsFulfilled', '0').strip() or '0'),
+                'lot_number': line_el.findtext('lotNumber', '').strip(),
+            })
+        reference = (
+            root.findtext('customerOrderReference', '').strip()
+            or root.findtext('orderReference', '').strip()
+        )
+        consignment_no = ''
+        consignment_el = root.find('.//consignment')
+        if consignment_el is not None:
+            consignment_no = consignment_el.findtext('consignmentNumber', '').strip()
+        carrier_name = ''
+        sp_el = root.find('serviceProvider')
+        if sp_el is not None:
+            carrier_name = sp_el.findtext('name', '').strip()
+        return {
+            'reference': reference,
+            'consignment_no': consignment_no,
+            'carrier_name': carrier_name,
+            'finalised_date': self._parse_date(root.findtext('dateDispatched', '')),
+            'eta_date': self._parse_date(root.findtext('etaDate', '')),
             'lines': lines,
         }
 
