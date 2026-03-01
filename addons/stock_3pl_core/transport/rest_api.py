@@ -69,6 +69,60 @@ class RestTransport(AbstractTransport):
             error_body = resp.text[:500].replace('\n', ' ').replace('\r', '') if resp.text else ''
             return self._retriable_error(f'HTTP {resp.status_code}: {error_body}')
 
+    def send_put(self, payload, content_type='xml', endpoint=None):
+        """PUT request — used for Order/Inward Update.
+
+        Same auth, timeout, and error-return contract as send().
+        Returns {'success': True} or {'success': False, 'error': ..., 'error_type': ...}
+        """
+        url = endpoint or self.connector.api_url
+        self._validate_url(url)
+        headers = {
+            'Content-Type': CONTENT_TYPES.get(content_type, 'application/xml'),
+            'Authorization': f'Bearer {self._get_auth_secret()}',
+        }
+        try:
+            data = payload if isinstance(payload, bytes) else payload.encode('utf-8')
+            resp = requests.put(url, data=data, headers=headers, timeout=30)
+        except requests.Timeout:
+            return self._retriable_error('Request timed out')
+        except requests.ConnectionError as e:
+            return self._retriable_error(f'Connection error: {e}')
+        except requests.exceptions.RequestException as e:
+            return self._retriable_error(f'Transport error: {str(e).split(chr(10))[0][:200]}')
+
+        if resp.status_code in (200, 201):
+            return self._success()
+        elif resp.status_code == 422:
+            error_body = resp.text[:500].replace('\n', ' ').replace('\r', '') if resp.text else ''
+            return self._validation_error(error_body)
+        else:
+            error_body = resp.text[:500].replace('\n', ' ').replace('\r', '') if resp.text else ''
+            return self._retriable_error(f'HTTP {resp.status_code}: {error_body}')
+
+    def send_delete(self, endpoint):
+        """DELETE request — used for Order/Inward Delete.
+
+        No request body — resource reference is encoded in the URL path.
+        Returns {'success': True} or {'success': False, 'error': ..., 'error_type': ...}
+        """
+        self._validate_url(endpoint)
+        headers = {'Authorization': f'Bearer {self._get_auth_secret()}'}
+        try:
+            resp = requests.delete(endpoint, headers=headers, timeout=30)
+        except requests.Timeout:
+            return self._retriable_error('Request timed out')
+        except requests.ConnectionError as e:
+            return self._retriable_error(f'Connection error: {e}')
+        except requests.exceptions.RequestException as e:
+            return self._retriable_error(f'Transport error: {str(e).split(chr(10))[0][:200]}')
+
+        if resp.status_code in (200, 204):
+            return self._success()
+        else:
+            error_body = resp.text[:500].replace('\n', ' ').replace('\r', '') if resp.text else ''
+            return self._retriable_error(f'HTTP {resp.status_code}: {error_body}')
+
     def poll(self, path=None):
         """Poll the REST endpoint for inbound payloads.
 

@@ -90,3 +90,56 @@ class TestRestTransport(TransactionCase):
         mock_get.return_value = MagicMock(status_code=404, text='Not Found')
         transport = self._make_transport()
         self.assertEqual(transport.poll(), [])
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.put')
+    def test_send_put_success(self, mock_put):
+        mock_put.return_value = MagicMock(status_code=200, text='OK')
+        transport = self._make_transport()
+        result = transport.send_put('<Order action="UPDATE"/>', content_type='xml',
+                                    endpoint='https://test.example.com/Order')
+        self.assertTrue(result['success'])
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.put')
+    def test_send_put_422_returns_validation_error(self, mock_put):
+        mock_put.return_value = MagicMock(status_code=422, text='Bad payload')
+        transport = self._make_transport()
+        result = transport.send_put('<Order/>', content_type='xml',
+                                    endpoint='https://test.example.com/Order')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error_type'], 'validation')
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.put')
+    def test_send_put_500_returns_retriable(self, mock_put):
+        mock_put.return_value = MagicMock(status_code=500, text='Error')
+        transport = self._make_transport()
+        result = transport.send_put('<Order/>', content_type='xml',
+                                    endpoint='https://test.example.com/Order')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error_type'], 'retriable')
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.delete')
+    def test_send_delete_success(self, mock_delete):
+        mock_delete.return_value = MagicMock(status_code=200, text='')
+        transport = self._make_transport()
+        result = transport.send_delete(endpoint='https://test.example.com/Order/SO001')
+        self.assertTrue(result['success'])
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.delete')
+    def test_send_delete_204_is_success(self, mock_delete):
+        mock_delete.return_value = MagicMock(status_code=204, text='')
+        transport = self._make_transport()
+        result = transport.send_delete(endpoint='https://test.example.com/Order/SO001')
+        self.assertTrue(result['success'])
+
+    @patch('odoo.addons.stock_3pl_core.transport.rest_api.requests.delete')
+    def test_send_delete_404_returns_retriable(self, mock_delete):
+        mock_delete.return_value = MagicMock(status_code=404, text='Not found')
+        transport = self._make_transport()
+        result = transport.send_delete(endpoint='https://test.example.com/Order/MISSING')
+        self.assertFalse(result['success'])
+        self.assertEqual(result['error_type'], 'retriable')
+
+    def test_send_delete_rejects_non_https(self):
+        transport = self._make_transport()
+        with self.assertRaises(ValueError):
+            transport.send_delete(endpoint='http://test.example.com/Order/SO001')
