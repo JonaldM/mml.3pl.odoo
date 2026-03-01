@@ -30,6 +30,18 @@ MF_TRACKING_STATUS_MAP = {
     'EXCEPTION': 'mf_exception',
 }
 
+# Fallback map for the richer public API schema where tracking events use
+# an eventCode string rather than a flat Status field.
+# See: https://developer.mainfreight.com/global/en/global-home/subscription-api/tracking-update-webhook.aspx
+MF_EVENT_CODE_MAP = {
+    'GoodsDelivered':    'mf_delivered',
+    'PickedUp':          'mf_dispatched',
+    'InTransit':         'mf_in_transit',
+    'OutForDelivery':    'mf_out_for_delivery',
+    'GoodsReceived':     'mf_received',
+    'DeliveryException': 'mf_exception',
+}
+
 
 class MainfreightRestTransport(RestTransport):
     """MF-specific REST transport — handles MF auth and endpoint routing."""
@@ -111,11 +123,26 @@ class MainfreightRestTransport(RestTransport):
             _logger.warning('get_tracking_status: could not parse JSON response for %s: %s', connote, exc)
             return {}
 
+        # Path A: flat Status field (PDF spec format)
         mf_status = data.get('Status')
         mapped_status = MF_TRACKING_STATUS_MAP.get(mf_status)
+
+        # Path B: eventCode from events array (public API / webhook schema).
+        # Only used if flat Status produced no match.
+        if mapped_status is None:
+            events = data.get('events', [])
+            if events:
+                latest = sorted(events, key=lambda e: e.get('sequence', 0), reverse=True)[0]
+                event_code = latest.get('code') or latest.get('eventCode', '')
+                mapped_status = MF_EVENT_CODE_MAP.get(event_code)
+
         if mapped_status is None:
             _logger.warning(
-                'get_tracking_status: unknown MF status %r for connote %s', mf_status, connote
+                'get_tracking_status: unknown MF status/eventCode for connote %s '
+                '(Status=%r, events=%r)',
+                connote,
+                data.get('Status'),
+                [e.get('code') for e in data.get('events', [])],
             )
             return {}
 

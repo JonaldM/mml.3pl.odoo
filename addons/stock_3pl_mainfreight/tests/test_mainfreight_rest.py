@@ -299,5 +299,76 @@ class TestMFCrudMethods(unittest.TestCase):
         self.assertNotIn('api-test', endpoint)
 
 
+class TestTrackingStatusMap(unittest.TestCase):
+
+    def setUp(self):
+        self.transport = MainfreightRestTransport(_FakeConnector('test'))
+
+    def _call_with_response(self, response_data):
+        """Patch requests.get to return response_data as JSON, call get_tracking_status."""
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = response_data
+        # Patch at the module level where mainfreight_rest imports requests
+        with patch.object(_mf_rest_mod.requests, 'get', return_value=mock_resp):
+            return self.transport.get_tracking_status('OTR000001')
+
+    # --- Existing flat-Status path (must still work) ---
+
+    def test_flat_status_delivered_maps_correctly(self):
+        result = self._call_with_response({'Status': 'DELIVERED'})
+        self.assertEqual(result.get('status'), 'mf_delivered')
+
+    def test_flat_status_dispatched_maps_correctly(self):
+        result = self._call_with_response({'Status': 'DISPATCHED'})
+        self.assertEqual(result.get('status'), 'mf_dispatched')
+
+    def test_flat_status_unknown_returns_empty(self):
+        result = self._call_with_response({'Status': 'UNKNOWN_CODE'})
+        self.assertEqual(result, {})
+
+    # --- New eventCode fallback path ---
+
+    def test_event_code_goods_delivered_maps_to_mf_delivered(self):
+        data = {'events': [{'sequence': 1, 'code': 'GoodsDelivered'}]}
+        result = self._call_with_response(data)
+        self.assertEqual(result.get('status'), 'mf_delivered')
+
+    def test_event_code_picked_up_maps_to_mf_dispatched(self):
+        data = {'events': [{'sequence': 1, 'code': 'PickedUp'}]}
+        result = self._call_with_response(data)
+        self.assertEqual(result.get('status'), 'mf_dispatched')
+
+    def test_event_code_latest_event_used_when_multiple(self):
+        """When multiple events exist, the one with the highest sequence wins."""
+        data = {
+            'events': [
+                {'sequence': 1, 'code': 'PickedUp'},
+                {'sequence': 3, 'code': 'GoodsDelivered'},
+                {'sequence': 2, 'code': 'InTransit'},
+            ]
+        }
+        result = self._call_with_response(data)
+        self.assertEqual(result.get('status'), 'mf_delivered')
+
+    def test_event_code_unknown_returns_empty(self):
+        data = {'events': [{'sequence': 1, 'code': 'SomeUnknownEvent'}]}
+        result = self._call_with_response(data)
+        self.assertEqual(result, {})
+
+    def test_no_status_and_no_events_returns_empty(self):
+        result = self._call_with_response({'trackingUrl': 'https://track.example.com'})
+        self.assertEqual(result, {})
+
+    def test_flat_status_takes_priority_over_events(self):
+        """If both Status and events are present, flat Status wins."""
+        data = {
+            'Status': 'IN_TRANSIT',
+            'events': [{'sequence': 1, 'code': 'GoodsDelivered'}],
+        }
+        result = self._call_with_response(data)
+        self.assertEqual(result.get('status'), 'mf_in_transit')
+
+
 if __name__ == '__main__':
     unittest.main()
