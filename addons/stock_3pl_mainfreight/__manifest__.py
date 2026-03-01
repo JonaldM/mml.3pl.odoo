@@ -26,6 +26,7 @@
             'stock_3pl_mainfreight/static/src/xml/mf_kpi_dashboard.xml',
         ],
     },
+    'controllers': ['controllers/webhook.py'],
     'demo': ['data/connector_mf_demo.xml'],
     'installable': True,
     'auto_install': False,
