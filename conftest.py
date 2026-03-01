@@ -156,6 +156,10 @@ def _install_odoo_stubs():
     odoo_tests.TransactionCase = TransactionCase
     odoo_tests.tagged = tagged
 
+    # ---- odoo.tests.common (alias — some test files import from here) ----
+    odoo_tests_common = types.ModuleType('odoo.tests.common')
+    odoo_tests_common.TransactionCase = TransactionCase
+
     # ---- odoo (root) ----
     odoo = types.ModuleType('odoo')
     odoo._stubbed = True
@@ -171,6 +175,7 @@ def _install_odoo_stubs():
     sys.modules['odoo.api'] = odoo_api
     sys.modules['odoo.exceptions'] = odoo_exceptions
     sys.modules['odoo.tests'] = odoo_tests
+    sys.modules['odoo.tests.common'] = odoo_tests_common
 
     # ---- odoo.addons namespace ----
     # Wire odoo.addons.* to the real addon directories on sys.path.

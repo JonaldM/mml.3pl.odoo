@@ -8,9 +8,13 @@ from odoo.addons.stock_3pl_core.transport.rest_api import RestTransport
 _logger = logging.getLogger(__name__)
 
 MF_ENDPOINTS = {
-    'test': 'https://warehouseapi-test.mainfreight.com/api/v1.1',
-    'production': 'https://warehouseapi.mainfreight.com/api/v1.1',
+    'test': 'https://api-test.mainfreight.com/warehousing/1.1/Customers',
+    'production': 'https://api.mainfreight.com/warehousing/1.1/Customers',
 }
+
+# NOTE: test base URL (api-test.mainfreight.com) is inferred from public docs.
+# Confirm with MF before first live test. Contact: APISupport@mainfreight.co.nz
+# See open question #1 in docs/plans/2026-03-02-api-gap-sprint-design.md
 
 MF_TRACKING_ENDPOINTS = {
     'test': 'https://trackingapi-test.mainfreight.com/api/v1',
@@ -37,13 +41,22 @@ class MainfreightRestTransport(RestTransport):
     def _get_base_url(self):
         return MF_ENDPOINTS.get(self.connector.environment, MF_ENDPOINTS['test'])
 
+    def _region(self):
+        """Return the MF region code for the ?region= query parameter.
+
+        Reads mf_region from the connector (added in Task 2).
+        Defaults to 'ANZ' (New Zealand / Australia) if empty or not set.
+        Valid values per MF docs: ANZ, EU, AMERICAS — confirm with MF if unsure.
+        """
+        return getattr(self.connector, 'mf_region', None) or 'ANZ'
+
     def send_order(self, payload):
         return self.send(payload, content_type='xml',
-                         endpoint=f'{self._get_base_url()}/Order')
+                         endpoint=f'{self._get_base_url()}/Order?region={self._region()}')
 
     def send_inward(self, payload):
         return self.send(payload, content_type='xml',
-                         endpoint=f'{self._get_base_url()}/Inward')
+                         endpoint=f'{self._get_base_url()}/Inward?region={self._region()}')
 
     def get_stock_on_hand(self):
         """Poll the MF StockOnHand endpoint.
@@ -51,7 +64,7 @@ class MainfreightRestTransport(RestTransport):
         Returns a list containing the response body on success, or [] on failure.
         Delegates to RestTransport.poll() to keep auth and retry logic in one place.
         """
-        return self.poll(path=f'{self._get_base_url()}/StockOnHand')
+        return self.poll(path=f'{self._get_base_url()}/StockOnHand?region={self._region()}')
 
     def _get_tracking_base_url(self):
         return MF_TRACKING_ENDPOINTS.get(self.connector.environment, MF_TRACKING_ENDPOINTS['test'])
