@@ -160,6 +160,24 @@ def _install_odoo_stubs():
     odoo_tests_common = types.ModuleType('odoo.tests.common')
     odoo_tests_common.TransactionCase = TransactionCase
 
+    # ---- odoo.http ----
+    # Stub for the Odoo HTTP controller framework.  Required so that
+    # controllers/webhook.py (and any future controllers) can be imported
+    # without a live Odoo runtime.
+    odoo_http = types.ModuleType('odoo.http')
+
+    class _StubController:
+        pass
+
+    def _stub_route(*args, **kwargs):
+        def decorator(fn):
+            return fn
+        return decorator
+
+    odoo_http.Controller = _StubController
+    odoo_http.route = _stub_route
+    odoo_http.request = None  # placeholder; not safe to use outside Odoo runtime
+
     # ---- odoo (root) ----
     odoo = types.ModuleType('odoo')
     odoo._stubbed = True
@@ -168,6 +186,7 @@ def _install_odoo_stubs():
     odoo.api = odoo_api
     odoo.exceptions = odoo_exceptions
     odoo.tests = odoo_tests
+    odoo.http = odoo_http
 
     sys.modules['odoo'] = odoo
     sys.modules['odoo.models'] = odoo_models
@@ -176,6 +195,7 @@ def _install_odoo_stubs():
     sys.modules['odoo.exceptions'] = odoo_exceptions
     sys.modules['odoo.tests'] = odoo_tests
     sys.modules['odoo.tests.common'] = odoo_tests_common
+    sys.modules['odoo.http'] = odoo_http
 
     # ---- odoo.addons namespace ----
     # Wire odoo.addons.* to the real addon directories on sys.path.
