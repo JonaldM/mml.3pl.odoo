@@ -33,6 +33,12 @@ def _stub_odoo_for_transport():
         def send(self, payload, content_type='xml', filename=None, endpoint=None):
             return {'success': True}
 
+        def send_put(self, payload, content_type='xml', endpoint=None):
+            return {'success': True}
+
+        def send_delete(self, endpoint):
+            return {'success': True}
+
         def poll(self, path=None):
             return []
 
@@ -242,6 +248,55 @@ class TestRegionParam(unittest.TestCase):
             transport.send_order('<Order/>')
         endpoint = mock_send.call_args[1]['endpoint']
         self.assertIn('?region=EU', endpoint)
+
+
+class TestMFCrudMethods(unittest.TestCase):
+
+    def test_update_order_uses_put_with_order_endpoint(self):
+        transport = MainfreightRestTransport(_FakeConnector('test', mf_region='ANZ'))
+        with patch.object(transport, 'send_put', return_value={'success': True}) as mock_put:
+            transport.update_order('<Order action="UPDATE"/>')
+        mock_put.assert_called_once()
+        endpoint = mock_put.call_args[1].get('endpoint') or mock_put.call_args[0][2]
+        self.assertIn('/Order', endpoint)
+        self.assertIn('?region=ANZ', endpoint)
+
+    def test_delete_order_uses_delete_with_ref_in_url(self):
+        transport = MainfreightRestTransport(_FakeConnector('test', mf_region='ANZ'))
+        with patch.object(transport, 'send_delete', return_value={'success': True}) as mock_del:
+            transport.delete_order('SO-001')
+        mock_del.assert_called_once()
+        endpoint = mock_del.call_args[1].get('endpoint') or mock_del.call_args[0][0]
+        self.assertIn('SO-001', endpoint)
+        self.assertIn('/Order/', endpoint)
+        self.assertIn('?region=ANZ', endpoint)
+
+    def test_delete_order_url_encodes_ref_with_slash(self):
+        """Order names containing '/' must be percent-encoded in the DELETE URL."""
+        transport = MainfreightRestTransport(_FakeConnector('test', mf_region='ANZ'))
+        with patch.object(transport, 'send_delete', return_value={'success': True}) as mock_del:
+            transport.delete_order('S/001')
+        endpoint = mock_del.call_args[1].get('endpoint') or mock_del.call_args[0][0]
+        self.assertNotIn('S/001', endpoint)   # raw slash must not appear
+        self.assertIn('S%2F001', endpoint)
+
+    def test_delete_inward_uses_delete_with_ref_in_url(self):
+        transport = MainfreightRestTransport(_FakeConnector('test', mf_region='ANZ'))
+        with patch.object(transport, 'send_delete', return_value={'success': True}) as mock_del:
+            transport.delete_inward('PO-001')
+        mock_del.assert_called_once()
+        endpoint = mock_del.call_args[1].get('endpoint') or mock_del.call_args[0][0]
+        self.assertIn('PO-001', endpoint)
+        self.assertIn('/Inward/', endpoint)
+        self.assertIn('?region=ANZ', endpoint)
+
+    def test_update_order_production_uses_production_url(self):
+        transport = MainfreightRestTransport(_FakeConnector('production', mf_region='ANZ'))
+        with patch.object(transport, 'send_put', return_value={'success': True}) as mock_put:
+            transport.update_order('<Order/>')
+        endpoint = mock_put.call_args[1].get('endpoint') or mock_put.call_args[0][2]
+        self.assertIn('api.mainfreight.com', endpoint)
+        self.assertNotIn('api-test', endpoint)
 
 
 if __name__ == '__main__':

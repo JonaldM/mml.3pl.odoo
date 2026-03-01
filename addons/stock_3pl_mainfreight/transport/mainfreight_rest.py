@@ -58,6 +58,23 @@ class MainfreightRestTransport(RestTransport):
         return self.send(payload, content_type='xml',
                          endpoint=f'{self._get_base_url()}/Inward?region={self._region()}')
 
+    def update_order(self, payload):
+        """PUT an updated order to MF — for amending an already-submitted sale order."""
+        return self.send_put(payload, content_type='xml',
+                             endpoint=f'{self._get_base_url()}/Order?region={self._region()}')
+
+    def delete_order(self, order_ref):
+        """DELETE a previously submitted order from MF by client order reference."""
+        return self.send_delete(
+            endpoint=f'{self._get_base_url()}/Order/{quote(order_ref, safe="")}?region={self._region()}'
+        )
+
+    def delete_inward(self, order_ref):
+        """DELETE a previously submitted inward order from MF by reference."""
+        return self.send_delete(
+            endpoint=f'{self._get_base_url()}/Inward/{quote(order_ref, safe="")}?region={self._region()}'
+        )
+
     def get_stock_on_hand(self):
         """Poll the MF StockOnHand endpoint.
 
