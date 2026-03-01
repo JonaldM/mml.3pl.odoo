@@ -10,9 +10,15 @@ class SalesOrderDocument(AbstractDocument):
     document_type = 'sales_order'
     format = 'xml'
 
-    def build_outbound(self, order):
-        """Build MF Sales Order XML (SOH header + SOL lines) for a sale.order record."""
-        root = etree.Element('Order')
+    def build_outbound(self, order, action='create'):
+        """Build MF Sales Order XML (SOH header + SOL lines) for a sale.order record.
+
+        action: 'create' (default) or 'update'. Controls the action= attribute on <Order>.
+        Raises ValueError for any other value.
+        """
+        if action not in ('create', 'update'):
+            raise ValueError(f"SalesOrderDocument.build_outbound: invalid action {action!r}")
+        root = etree.Element('Order', action=action.upper())
         partner = order.partner_shipping_id or order.partner_id
         invoice_partner = order.partner_invoice_id or order.partner_id
 
@@ -69,3 +75,7 @@ class SalesOrderDocument(AbstractDocument):
         return self.make_idempotency_key(
             self.connector.id, self.document_type, order.name
         )
+
+    def build_delete_ref(self, order):
+        """Return the order reference used in the MF DELETE /Order/{ref} URL path."""
+        return order.name

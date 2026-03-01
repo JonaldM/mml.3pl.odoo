@@ -95,3 +95,29 @@ class TestSalesOrderDocument(TransactionCase):
         key1 = doc.get_idempotency_key(self.order)
         key2 = doc.get_idempotency_key(self.order)
         self.assertEqual(key1, key2)
+
+    def test_build_outbound_default_action_is_create(self):
+        from odoo.addons.stock_3pl_mainfreight.document.sales_order import SalesOrderDocument
+        doc = SalesOrderDocument(self.connector, self.env)
+        xml = doc.build_outbound(self.order)
+        root = etree.fromstring(xml.encode(), _XML_PARSER)
+        self.assertEqual(root.get('action'), 'CREATE')
+
+    def test_build_outbound_update_action(self):
+        from odoo.addons.stock_3pl_mainfreight.document.sales_order import SalesOrderDocument
+        doc = SalesOrderDocument(self.connector, self.env)
+        xml = doc.build_outbound(self.order, action='update')
+        root = etree.fromstring(xml.encode(), _XML_PARSER)
+        self.assertEqual(root.get('action'), 'UPDATE')
+
+    def test_build_outbound_invalid_action_raises(self):
+        from odoo.addons.stock_3pl_mainfreight.document.sales_order import SalesOrderDocument
+        doc = SalesOrderDocument(self.connector, self.env)
+        with self.assertRaises(ValueError):
+            doc.build_outbound(self.order, action='delete')
+
+    def test_build_delete_ref_returns_order_name(self):
+        from odoo.addons.stock_3pl_mainfreight.document.sales_order import SalesOrderDocument
+        doc = SalesOrderDocument(self.connector, self.env)
+        ref = doc.build_delete_ref(self.order)
+        self.assertEqual(ref, self.order.name)
