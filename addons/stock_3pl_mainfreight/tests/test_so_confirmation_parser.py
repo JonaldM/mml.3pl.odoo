@@ -15,14 +15,18 @@ def _stub_odoo_for_document():
     if 'odoo' not in sys.modules:
         sys.modules['odoo'] = types.ModuleType('odoo')
 
-    # odoo.exceptions.ValidationError
-    exc_mod = types.ModuleType('odoo.exceptions')
-    class ValidationError(Exception):
-        pass
-    exc_mod.ValidationError = ValidationError
-    sys.modules['odoo.exceptions'] = exc_mod
+    # odoo.exceptions — only install stub if not already present (e.g. from conftest).
+    # Unconditional assignment would replace conftest's stub (which includes UserError)
+    # with this minimal one (ValidationError only), breaking other tests in a full suite run.
+    if 'odoo.exceptions' not in sys.modules:
+        exc_mod = types.ModuleType('odoo.exceptions')
+        class ValidationError(Exception):
+            pass
+        exc_mod.ValidationError = ValidationError
+        sys.modules['odoo.exceptions'] = exc_mod
 
     # odoo.addons.stock_3pl_core.models.document_base.AbstractDocument
+    # Use setdefault so conftest's real module load takes precedence.
     class AbstractDocument:
         def __init__(self, connector, env):
             self.connector = connector
@@ -40,9 +44,9 @@ def _stub_odoo_for_document():
     core_doc = types.ModuleType('odoo.addons.stock_3pl_core.models.document_base')
     core_doc.AbstractDocument = AbstractDocument
     sys.modules.setdefault('odoo.addons', types.ModuleType('odoo.addons'))
-    sys.modules['odoo.addons.stock_3pl_core'] = core
-    sys.modules['odoo.addons.stock_3pl_core.models'] = core_models
-    sys.modules['odoo.addons.stock_3pl_core.models.document_base'] = core_doc
+    sys.modules.setdefault('odoo.addons.stock_3pl_core', core)
+    sys.modules.setdefault('odoo.addons.stock_3pl_core.models', core_models)
+    sys.modules.setdefault('odoo.addons.stock_3pl_core.models.document_base', core_doc)
 
 
 _stub_odoo_for_document()
