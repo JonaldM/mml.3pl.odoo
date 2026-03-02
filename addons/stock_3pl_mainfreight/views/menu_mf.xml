@@ -3,7 +3,8 @@
     <!-- ── Root: 3PL Operations (standalone app tile) ────────────── -->
     <menuitem id="menu_3pl_ops_root"
               name="3PL Operations"
-              sequence="52"/>
+              sequence="52"
+              action="action_mf_kpi_dashboard"/>
 
     <!-- ── Operations ─────────────────────────────────────────────── -->
     <menuitem id="menu_mf_dashboard"
