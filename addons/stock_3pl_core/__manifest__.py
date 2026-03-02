@@ -3,7 +3,9 @@
     'version': '15.0.1.0.0',
     'category': 'Inventory/Inventory',
     'summary': 'Forwarder-agnostic 3PL warehousing integration platform',
-    'depends': ['mail', 'stock', 'sale_management', 'purchase'],
+    'depends': ['mml_base', 'mail', 'stock', 'sale_management', 'purchase'],
+    'post_init_hook': 'post_init_hook',
+    'uninstall_hook': 'uninstall_hook',
     'external_dependencies': {'python': ['paramiko']},
     'data': [
         'security/ir.model.access.csv',
