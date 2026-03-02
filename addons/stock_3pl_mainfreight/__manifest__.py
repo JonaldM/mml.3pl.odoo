@@ -1,6 +1,6 @@
 {
     'name': '3PL Integration \u2014 Mainfreight',
-    'version': '15.0.2.0.0',
+    'version': '19.0.2.0.0',
     'category': 'Inventory/Inventory',
     'summary': 'Mainfreight Warehousing 3PL integration',
     'author': 'MML',

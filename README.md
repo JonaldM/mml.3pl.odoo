@@ -1,6 +1,6 @@
 # Mainfreight 3PL Integration for Odoo 19
 
-A bidirectional integration layer between Mainfreight warehousing and Odoo 15 ERP, synchronising orders, products, stock confirmations, and inventory in both directions.
+A bidirectional integration layer between Mainfreight warehousing and Odoo 19 ERP, synchronising orders, products, stock confirmations, and inventory in both directions.
 
 ## Overview
 
@@ -188,7 +188,7 @@ pip install paramiko
 
 ### Step 2 — Enable a Warehouse for Routing
 
-Go to **Inventory → Warehouses → [warehouse] → Mainfreight Routing tab**:
+Go to **3PL Operations → Configuration → Connectors**, then navigate to **Inventory → Warehouses → [warehouse] → Mainfreight Routing tab** for routing settings:
 
 - Set `x_mf_enabled = True` to include this warehouse in routing decisions.
 - Enter `x_mf_latitude` and `x_mf_longitude` (decimal degrees) so the routing engine can compute distances.
@@ -197,7 +197,7 @@ Go to **Inventory → Warehouses → [warehouse] → Mainfreight Routing tab**:
 
 ### Step 3 — Create a Connector
 
-Go to **3PL Integration → Connectors → New**:
+Go to **3PL Operations → Configuration → Connectors → New**:
 
 | Field | Description |
 |-------|-------------|

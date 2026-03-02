@@ -1,6 +1,6 @@
 {
     'name': '3PL Integration Core',
-    'version': '15.0.1.0.0',
+    'version': '19.0.1.0.0',
     'category': 'Inventory/Inventory',
     'summary': 'Forwarder-agnostic 3PL warehousing integration platform',
     'depends': ['mml_base', 'mail', 'stock', 'sale_management', 'purchase'],
