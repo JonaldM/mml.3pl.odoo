@@ -44,13 +44,16 @@ addons/
     │   └── inbound_cron.py      # mf.inbound.cron — dispatches SOH/ACKH/ACKL files, processes received message queue, reconciles stale orders (60 min)
     ├── document/
     │   ├── product_spec.py      # CSV builder (outbound)
-    │   ├── sales_order.py       # XML builder (outbound)
-    │   ├── so_confirmation.py   # XML parser (inbound, XXE hardened)
+    │   ├── sales_order.py       # XML builder (outbound, action=CREATE|UPDATE, build_delete_ref)
+    │   ├── inward_order.py      # XML builder (outbound, action=CREATE|UPDATE, build_delete_ref)
+    │   ├── so_confirmation.py   # XML parser (inbound, dual-schema: SCH/SCL + webhook-style)
     │   ├── so_acknowledgement.py # CSV parser (inbound, ACKH/ACKL)
     │   └── inventory_report.py  # CSV parser → stock.quant upsert (inbound)
     ├── transport/
     │   ├── mainfreight_rest.py  # MainfreightRestTransport (warehousing + tracking APIs)
     │   └── freightways_rest.py  # FreightwaysRestTransport (Castle Parcels tracking API)
+    ├── controllers/
+    │   └── webhook.py           # Dormant MF webhook stub (3 POST routes, X-MF-Secret auth)
     └── utils/
         └── haversine.py         # Pure-Python great-circle distance
 ```
@@ -212,6 +215,7 @@ Go to **3PL Integration → Connectors → New**:
 - Warehousing API Secret (`mf_warehousing_secret`) — used for `/Order` and `/Inward` endpoints
 - Tracking API Secret (`mf_tracking_secret`) — used for the MF Tracking API
 - Label, Rating secrets as required for additional MF API surfaces
+- **MF Region** (`mf_region`) — warehousing API `?region=` query parameter. Default `ANZ` (covers NZ and AU). Confirm exact value with Mainfreight before go-live; other known values: `EU`, `AMERICAS`.
 
 **For Freightways / Castle Parcels REST API transport**, fill:
 - Freightways API Key (`fw_api_key`) — sent as `X-API-Key` header
@@ -316,7 +320,7 @@ python odoo-bin -u stock_3pl_core,stock_3pl_mainfreight \
 
 The `conftest.py` at the repo root automatically marks any test class that imports from `odoo.tests` with the `odoo_integration` pytest marker, so the `-m "not odoo_integration"` filter works without decorating individual files.
 
-Sprint 1 delivered 44 pure-Python tests. Sprint 2 extended to 100 tests adding haversine, route engine, split engine, cross-border detection, and push cron coverage. Sprint 3 brought the total to 228 tests covering tracking cron, inbound cron, SOH cross-check, credential encryption, SFTP host key verification, and the Freightways transport adapter. The inbound processing fixes (CSV type detection, ACK dispatch, received message processor) extended the suite to **312 pure-Python tests**. 65 Odoo integration tests require `odoo-bin` and are tagged `odoo_integration`.
+Sprint 1 delivered 44 pure-Python tests. Sprint 2 extended to 100 tests adding haversine, route engine, split engine, cross-border detection, and push cron coverage. Sprint 3 brought the total to 228 tests covering tracking cron, inbound cron, SOH cross-check, credential encryption, SFTP host key verification, and the Freightways transport adapter. The inbound processing fixes extended the suite to 312 tests. The API gap sprint added dual-schema parser tests, dual tracking map tests, REST CRUD method tests, webhook secret validation tests, and delete-ref tests, bringing the total to **357 pure-Python tests**. 90 Odoo integration tests require `odoo-bin` and are tagged `odoo_integration`.
 
 ## Development
 
@@ -375,6 +379,7 @@ No changes to `stock_3pl_core` or `stock_3pl_mainfreight` are required.
 | Phase 2 | KPI dashboard (OWL), kanban pipeline, exception queue, inventory discrepancy screen | Complete |
 | Inbound processing | CSV type detection (SOH vs ACKH/ACKL), ACK dispatch, received message queue processor | Complete |
 | Bug hunt + security hardening | Full-codebase audit: SFTP inbound tuple unpacking (silent payload loss), Odoo 15 `move_ids` rename in split engine and SO confirmation, Freightways credential field scope fix, empty payload guard, fractional quantity rounding, `description_sale` sync field removal, SSRF URL validation, HTTP POST query-string encoding, credential store decryption safety, XML wildcard carrier lookup, CSV numeric overflow guards, XSS chatter escaping, KPI query bounds | Complete |
+| **API gap sprint** | Corrected public API base URLs (`api[-test].mainfreight.com/warehousing/1.1/Customers`); `?region=` query param + `mf_region` connector field; `send_put`/`send_delete` on `RestTransport`; `update_order`, `delete_order`, `delete_inward` on MF transport; `action=CREATE\|UPDATE` on outbound documents + `build_delete_ref()`; dual tracking status map (flat `Status` + `eventCode` fallback); dual SO Confirmation parser (SCH/SCL + webhook-style); dormant webhook stub controller (3 POST routes, X-MF-Secret) | **Complete** |
 
 ## License
 
@@ -382,7 +387,7 @@ OPL-1. See individual `__manifest__.py` files for per-module licensing.
 
 ## Contributing
 
-Raise a pull request against `master`. Run the pure-Python test suite (`pytest -m "not odoo_integration" -q`) before submitting — all 312 tests must pass.
+Raise a pull request against `master`. Run the pure-Python test suite (`pytest -m "not odoo_integration" -q`) before submitting — all 357 tests must pass.
 
 ### Known Limitations
 
@@ -391,3 +396,6 @@ Raise a pull request against `master`. Run the pure-Python test suite (`pytest -
 - **`x_mf_connector_id` override is not yet wired:** The reassign-warehouse wizard writes this field, but the push cron does not yet read it to route a re-assigned picking to a different connector. Manual reassignment requires a direct re-queue.
 - **Stale order detection uses `write_date`:** `_reconcile_sent_orders` uses `write_date` as a proxy for "time since last MF send". Any unrelated field write refreshes `write_date` and resets the timer. A dedicated `x_mf_sent_date` field would be more accurate; this is tracked for a future minor release.
 - **Equatorial/meridian coordinate fallback:** Partners at exactly `latitude=0` or `longitude=0` are treated as having no geocoordinates and fall back to the first enabled warehouse. This is intentional (Odoo Float fields default to `0.0`) but may misroute addresses genuinely at the equator or prime meridian.
+- **Webhook controller is dormant:** The three MF webhook routes (`/mf/webhook/*`) accept and log payloads but do not enqueue them for processing. Activate by wiring `_handle_webhook` to `3pl.message` create and setting `stock_3pl_mainfreight.webhook_secret` in system parameters. Requires cloud hosting with a public HTTPS endpoint.
+- **Cancellation not yet wired to MF delete:** `delete_order` and `delete_inward` transport methods are implemented and tested, but SO/PO cancellation in Odoo does not yet automatically call them. Scope trigger wiring with the ops team (auto vs. manual approval).
+- **`mf_region` value unconfirmed:** Default is `ANZ`. Confirm the exact string for NZ/AU with Mainfreight before go-live (known alternatives: `NZ`, `AU`, `NewZealand`).
