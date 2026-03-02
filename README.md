@@ -1,4 +1,4 @@
-# Mainfreight 3PL Integration for Odoo 15
+# Mainfreight 3PL Integration for Odoo 19
 
 A bidirectional integration layer between Mainfreight warehousing and Odoo 15 ERP, synchronising orders, products, stock confirmations, and inventory in both directions.
 
