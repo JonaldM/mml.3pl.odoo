@@ -1,3 +1,4 @@
+import hmac
 import logging
 from odoo import http
 from odoo.http import request
@@ -15,7 +16,7 @@ def _validate_webhook_secret(env, request_secret):
         return False
     stored = env['ir.config_parameter'].sudo().get_param(
         'stock_3pl_mainfreight.webhook_secret', default='')
-    return bool(stored) and stored == request_secret
+    return bool(stored) and hmac.compare_digest(stored, request_secret)
 
 
 class MFWebhookController(http.Controller):
@@ -40,6 +41,6 @@ class MFWebhookController(http.Controller):
         if not _validate_webhook_secret(request.env, secret):
             return request.make_json_response({'error': 'unauthorized'}, status=401)
         body = request.httprequest.data.decode('utf-8', errors='replace')
-        _logger.info('MF webhook %s received: %s', event_type, body[:500])
+        _logger.debug('MF webhook %s received (%d bytes)', event_type, len(body))
         # TODO: wire to inbound message queue when on cloud hosting
         return request.make_json_response({'status': 'received'})

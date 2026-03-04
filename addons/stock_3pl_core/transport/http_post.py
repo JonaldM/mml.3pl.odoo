@@ -1,4 +1,5 @@
 # addons/stock_3pl_core/transport/http_post.py
+import re
 import requests
 import logging
 from urllib.parse import quote
@@ -17,7 +18,10 @@ class HttpPostTransport(AbstractTransport):
 
     def send(self, payload, content_type='xml', filename=None, endpoint=None):
         url = self.connector.http_post_url
+        self._validate_url(url)
         transport_name = self.connector.http_transport_name
+        if not re.match(r'^[A-Za-z0-9_-]+$', transport_name):
+            raise ValueError(f'Invalid transport_name: {transport_name!r}')
         full_url = f'{url}?TransportName={quote(transport_name, safe="")}'
         data = payload if isinstance(payload, bytes) else payload.encode('utf-8')
         try:

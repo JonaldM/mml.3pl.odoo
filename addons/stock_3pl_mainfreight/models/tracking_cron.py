@@ -106,7 +106,8 @@ class MFTrackingCron(models.AbstractModel):
             write_vals['x_mf_pod_url'] = pod_url
 
         signed_by = result.get('signed_by')
-        if signed_by:
+        if signed_by and isinstance(signed_by, str):
+            signed_by = signed_by.strip()[:100]
             write_vals['x_mf_signed_by'] = signed_by
 
         delivered_at = result.get('delivered_at')

@@ -95,7 +95,10 @@ def decrypt_credential(env, value: str) -> str:
         return f.decrypt(token).decode('utf-8')
     except Exception as exc:
         _logger.error(
-            'decrypt_credential: failed to decrypt stored credential — '
-            'the value may be corrupted or the encryption key may have changed: %s', exc
+            'decrypt_credential: failed to decrypt — key may have changed. '
+            'Re-enter credentials on the connector. Error: %s', exc
         )
-        return ''
+        raise UserError(
+            'Credential decryption failed. The encryption key may have changed. '
+            'Re-enter credentials on the connector.'
+        ) from exc

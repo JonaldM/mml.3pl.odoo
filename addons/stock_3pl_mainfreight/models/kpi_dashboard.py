@@ -66,9 +66,9 @@ class MfKpiDashboard(models.AbstractModel):
             'ira_amber_offset': float(ICP.get_param(
                 'stock_3pl_mainfreight.kpi_ira_amber_offset', '3'
             )),
-            'difot_grace_days': int(ICP.get_param(
-                'stock_3pl_mainfreight.difot_grace_days', '0'
-            )),
+            'difot_grace_days': max(0, min(90, int(ICP.get_param(
+                'stock_3pl_mainfreight.difot_grace_days', '0') or '0'
+            ))),
             'ira_tolerance': float(ICP.get_param(
                 'stock_3pl_mainfreight.ira_tolerance', '0.005'
             )),
