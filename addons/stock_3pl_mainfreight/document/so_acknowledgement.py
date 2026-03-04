@@ -76,7 +76,7 @@ class SOAcknowledgementDocument(AbstractDocument):
                 lambda p: p.state not in ('done', 'cancel')
             )[:1]
             if picking and hasattr(picking, 'x_mf_status'):
-                picking.x_mf_status = 'mf_received'
+                picking.write({'x_mf_status': 'mf_received'})
                 _logger.info('MF ACK: order %s acknowledged by MF (status: %s)',
                              order_ref, ack.get('order_status'))
                 applied += 1

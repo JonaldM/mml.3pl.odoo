@@ -78,6 +78,7 @@ class InventoryReportDocument(AbstractDocument):
 
         applied = 0
         skipped = 0
+        flagged = 0
         for line in lines:
             try:
                 product_code = _validate_ref(line.get('product_code'), 'product code')
@@ -102,9 +103,6 @@ class InventoryReportDocument(AbstractDocument):
             ], limit=1)
             odoo_qty = existing_quant.quantity if existing_quant else 0.0
 
-            self._sync_quant(product, stock_location, mf_qty)
-            applied += 1
-
             # Write discrepancy record if drift exceeds tolerance
             variance = abs(mf_qty - odoo_qty)
             # threshold = 0 when odoo_qty == 0 (new product at MF not yet in Odoo)
@@ -112,13 +110,20 @@ class InventoryReportDocument(AbstractDocument):
             threshold = odoo_qty * tolerance
             if variance > threshold:
                 self._write_discrepancy(product, mf_qty, odoo_qty)
+                flagged += 1
+            else:
+                # Within tolerance — auto-accept
+                self._sync_quant(product, stock_location, mf_qty)
+                applied += 1
 
-        _logger.info('MF SOH: applied=%d skipped=%d', applied, skipped)
+        _logger.info('MF SOH: applied=%d skipped=%d flagged=%d', applied, skipped, flagged)
 
         if report_date:
             # Record when this report was applied (not the report's date).
             # last_soh_applied_at is used by is_stale() to reject older reports.
             self.connector.sudo().write({'last_soh_applied_at': fields.Datetime.now()})
+
+        return {'applied': applied, 'skipped': skipped, 'flagged': flagged}
 
     def apply_inbound(self, message):
         """Apply inbound inventory report from a 3pl.message record."""
