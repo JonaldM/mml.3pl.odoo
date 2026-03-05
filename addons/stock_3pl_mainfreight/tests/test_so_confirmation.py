@@ -9,7 +9,7 @@ FIXTURE_DIR = os.path.join(os.path.dirname(__file__), 'fixtures')
 class TestSOConfirmation(TransactionCase):
 
     def _load_fixture(self, name):
-        with open(os.path.join(FIXTURE_DIR, name)) as f:
+        with open(os.path.join(FIXTURE_DIR, name), encoding='utf-8') as f:
             return f.read()
 
     def test_parse_confirmation_extracts_reference(self):
@@ -46,7 +46,7 @@ class TestSOConfirmation(TransactionCase):
 class TestSOAcknowledgement(TransactionCase):
 
     def _load_fixture(self, name):
-        with open(os.path.join(FIXTURE_DIR, name)) as f:
+        with open(os.path.join(FIXTURE_DIR, name), encoding='utf-8') as f:
             return f.read()
 
     def test_parse_ack_extracts_order_reference(self):

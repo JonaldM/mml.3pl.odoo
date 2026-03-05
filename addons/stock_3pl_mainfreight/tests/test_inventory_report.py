@@ -28,7 +28,7 @@ class TestInventoryReport(TransactionCase):
         })
 
     def _load_fixture(self):
-        with open(os.path.join(FIXTURE_DIR, 'inventory_report.csv')) as f:
+        with open(os.path.join(FIXTURE_DIR, 'inventory_report.csv'), encoding='utf-8') as f:
             return f.read()
 
     def _get_doc(self):
