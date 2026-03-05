@@ -91,10 +91,11 @@ class ThreePlConnector(models.Model):
         for rec in self:
             rec.message_count = len(rec.message_ids)
 
-    @api.model
-    def create(self, vals):
-        self._encrypt_credential_vals(vals)
-        return super().create(vals)
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            self._encrypt_credential_vals(vals)
+        return super().create(vals_list)
 
     def write(self, vals):
         self._encrypt_credential_vals(vals)

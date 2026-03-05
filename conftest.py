@@ -123,6 +123,7 @@ def _install_odoo_stubs():
     # ---- odoo.api ----
     odoo_api = types.ModuleType('odoo.api')
     odoo_api.model = lambda f: f
+    odoo_api.model_create_multi = lambda f: f
     odoo_api.depends = lambda *args: (lambda f: f)
     odoo_api.constrains = lambda *args: (lambda f: f)
     odoo_api.onchange = lambda *args: (lambda f: f)

@@ -15,12 +15,13 @@ class ThreePlConnectorFreightways(models.Model):
     )
     fw_account_number = fields.Char('Freightways Account Number')
 
-    @api.model
-    def create(self, vals):
-        for field in self._FW_CREDENTIAL_FIELDS:
-            if field in vals and vals[field]:
-                vals[field] = encrypt_credential(self.env, vals[field])
-        return super().create(vals)
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            for field in self._FW_CREDENTIAL_FIELDS:
+                if field in vals and vals[field]:
+                    vals[field] = encrypt_credential(self.env, vals[field])
+        return super().create(vals_list)
 
     def write(self, vals):
         for field in self._FW_CREDENTIAL_FIELDS:

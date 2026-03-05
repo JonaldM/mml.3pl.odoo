@@ -102,3 +102,64 @@ class TestConnector(TransactionCase):
             'environment': 'test',
         })
         self.assertFalse(connector.product_category_ids)
+
+
+# ---------------------------------------------------------------------------
+# Pure-Python structural tests — no Odoo runtime required
+# Run with: python -m pytest addons/stock_3pl_core/tests/test_connector.py -v
+# ---------------------------------------------------------------------------
+
+import ast
+import os
+import pytest
+
+
+def test_connector_create_accepts_vals_list():
+    """Verify create() is decorated with @api.model_create_multi signature."""
+    src_path = os.path.join(os.path.dirname(__file__), '..', 'models', 'connector.py')
+    with open(src_path) as f:
+        source = f.read()
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == 'create':
+            for dec in node.decorator_list:
+                if isinstance(dec, ast.Attribute) and dec.attr == 'model_create_multi':
+                    args = [a.arg for a in node.args.args]
+                    assert 'vals_list' in args, f"create() should accept vals_list, got {args}"
+                    return
+            pytest.fail("create() does not have @api.model_create_multi decorator")
+    pytest.fail("No create() method found in connector.py")
+
+
+def test_connector_mf_create_accepts_vals_list():
+    """Verify connector_mf create() is decorated with @api.model_create_multi."""
+    src_path = os.path.join(os.path.dirname(__file__), '..', '..', 'stock_3pl_mainfreight', 'models', 'connector_mf.py')
+    with open(src_path) as f:
+        source = f.read()
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == 'create':
+            for dec in node.decorator_list:
+                if isinstance(dec, ast.Attribute) and dec.attr == 'model_create_multi':
+                    args = [a.arg for a in node.args.args]
+                    assert 'vals_list' in args
+                    return
+            pytest.fail("connector_mf create() missing @api.model_create_multi")
+    pytest.fail("No create() found in connector_mf.py")
+
+
+def test_connector_freightways_create_accepts_vals_list():
+    """Verify connector_freightways create() is decorated with @api.model_create_multi."""
+    src_path = os.path.join(os.path.dirname(__file__), '..', '..', 'stock_3pl_mainfreight', 'models', 'connector_freightways.py')
+    with open(src_path) as f:
+        source = f.read()
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == 'create':
+            for dec in node.decorator_list:
+                if isinstance(dec, ast.Attribute) and dec.attr == 'model_create_multi':
+                    args = [a.arg for a in node.args.args]
+                    assert 'vals_list' in args
+                    return
+            pytest.fail("connector_freightways create() missing @api.model_create_multi")
+    pytest.fail("No create() found in connector_freightways.py")
