@@ -53,6 +53,28 @@ class MFTrackingCron(models.AbstractModel):
                     '_run_mf_tracking: unexpected error for picking %s (connote %s): %s',
                     picking.name, picking.x_mf_connote, exc,
                 )
+                self._send_cron_alert(
+                    'stock_3pl_mainfreight',
+                    'Tracking poll failed for picking %s (connote %s)' % (
+                        picking.name, picking.x_mf_connote),
+                    str(exc),
+                )
+
+    def _send_cron_alert(self, module_name: str, subject: str, body: str) -> None:
+        """Send an email alert when a scheduled action fails."""
+        alert_email = self.env['ir.config_parameter'].sudo().get_param(
+            'mml.cron_alert_email', False
+        )
+        if not alert_email:
+            return
+        try:
+            self.env['mail.mail'].sudo().create({
+                'subject': '[MML ALERT] %s: %s' % (module_name, subject),
+                'body_html': '<pre>%s</pre>' % body,
+                'email_to': alert_email,
+            }).send()
+        except Exception:
+            _logger.exception('Failed to send cron alert email for %s', module_name)
 
     def _poll_and_update(self, picking):
         """Poll the tracking API for a single picking and write updates.
