@@ -17,6 +17,9 @@ class ThreePlConnectorFreightways(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        # Encrypts Freightways-specific credential fields before INSERT.
+        # super().create() subsequently handles base _CREDENTIAL_FIELDS.
+        # encrypt_credential() is idempotent on already-encrypted values.
         for vals in vals_list:
             for field in self._FW_CREDENTIAL_FIELDS:
                 if field in vals and vals[field]:

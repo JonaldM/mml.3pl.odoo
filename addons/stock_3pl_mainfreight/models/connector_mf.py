@@ -40,6 +40,10 @@ class ThreePlConnectorMF(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        # Encrypts MF-specific credential fields before INSERT.
+        # super().create() will subsequently call _encrypt_credential_vals()
+        # on the same dicts for base _CREDENTIAL_FIELDS. encrypt_credential()
+        # is idempotent on already-encrypted (enc:-prefixed) values.
         for vals in vals_list:
             for field in self._MF_CREDENTIAL_FIELDS:
                 if field in vals and vals[field]:

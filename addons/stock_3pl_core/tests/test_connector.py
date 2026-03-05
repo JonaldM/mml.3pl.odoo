@@ -117,7 +117,7 @@ import pytest
 def test_connector_create_accepts_vals_list():
     """Verify create() is decorated with @api.model_create_multi signature."""
     src_path = os.path.join(os.path.dirname(__file__), '..', 'models', 'connector.py')
-    with open(src_path) as f:
+    with open(src_path, encoding='utf-8') as f:
         source = f.read()
     tree = ast.parse(source)
     for node in ast.walk(tree):
@@ -134,7 +134,7 @@ def test_connector_create_accepts_vals_list():
 def test_connector_mf_create_accepts_vals_list():
     """Verify connector_mf create() is decorated with @api.model_create_multi."""
     src_path = os.path.join(os.path.dirname(__file__), '..', '..', 'stock_3pl_mainfreight', 'models', 'connector_mf.py')
-    with open(src_path) as f:
+    with open(src_path, encoding='utf-8') as f:
         source = f.read()
     tree = ast.parse(source)
     for node in ast.walk(tree):
@@ -142,7 +142,7 @@ def test_connector_mf_create_accepts_vals_list():
             for dec in node.decorator_list:
                 if isinstance(dec, ast.Attribute) and dec.attr == 'model_create_multi':
                     args = [a.arg for a in node.args.args]
-                    assert 'vals_list' in args
+                    assert 'vals_list' in args, f"create() should accept vals_list, got {args}"
                     return
             pytest.fail("connector_mf create() missing @api.model_create_multi")
     pytest.fail("No create() found in connector_mf.py")
@@ -151,7 +151,7 @@ def test_connector_mf_create_accepts_vals_list():
 def test_connector_freightways_create_accepts_vals_list():
     """Verify connector_freightways create() is decorated with @api.model_create_multi."""
     src_path = os.path.join(os.path.dirname(__file__), '..', '..', 'stock_3pl_mainfreight', 'models', 'connector_freightways.py')
-    with open(src_path) as f:
+    with open(src_path, encoding='utf-8') as f:
         source = f.read()
     tree = ast.parse(source)
     for node in ast.walk(tree):
@@ -159,7 +159,29 @@ def test_connector_freightways_create_accepts_vals_list():
             for dec in node.decorator_list:
                 if isinstance(dec, ast.Attribute) and dec.attr == 'model_create_multi':
                     args = [a.arg for a in node.args.args]
-                    assert 'vals_list' in args
+                    assert 'vals_list' in args, f"create() should accept vals_list, got {args}"
                     return
             pytest.fail("connector_freightways create() missing @api.model_create_multi")
     pytest.fail("No create() found in connector_freightways.py")
+
+
+def test_connector_create_loops_over_vals_list():
+    """Verify create() body iterates vals_list (not a single vals dict)."""
+    import os, ast
+    src_path = os.path.join(os.path.dirname(__file__), '..', 'models', 'connector.py')
+    with open(src_path, encoding='utf-8') as f:
+        source = f.read()
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == 'create':
+            # Find a For loop in the body
+            for_loops = [n for n in ast.walk(node) if isinstance(n, ast.For)]
+            assert for_loops, "create() must contain a for loop over vals_list"
+            # The for loop target must be 'vals' iterating over 'vals_list'
+            loop = for_loops[0]
+            assert isinstance(loop.target, ast.Name) and loop.target.id == 'vals', \
+                "Loop variable must be 'vals'"
+            assert isinstance(loop.iter, ast.Name) and loop.iter.id == 'vals_list', \
+                "Loop must iterate over 'vals_list'"
+            return
+    pytest.fail("No create() method found in connector.py")
