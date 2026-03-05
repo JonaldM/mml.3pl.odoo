@@ -1,6 +1,7 @@
 # addons/stock_3pl_mainfreight/models/tracking_cron.py
 """MF tracking cron — polls MF Tracking API and updates x_mf_status on pickings."""
 import logging
+import re
 from odoo import models, api
 
 _logger = logging.getLogger(__name__)
@@ -105,10 +106,12 @@ class MFTrackingCron(models.AbstractModel):
         if pod_url:
             write_vals['x_mf_pod_url'] = pod_url
 
-        signed_by = result.get('signed_by')
-        if signed_by and isinstance(signed_by, str):
-            signed_by = signed_by.strip()[:100]
-            write_vals['x_mf_signed_by'] = signed_by
+        raw_signed = result.get('signed_by')
+        if raw_signed:
+            raw = str(raw_signed)
+            signed_by = re.sub(r'[^\x20-\x7E]', '', raw)[:128]
+            if signed_by:
+                write_vals['x_mf_signed_by'] = signed_by
 
         delivered_at = result.get('delivered_at')
         if delivered_at:
