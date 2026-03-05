@@ -6,6 +6,8 @@ They require the project root on PYTHONPATH so that Odoo addons are importable
 (handled by conftest.py in the project root). Business logic is tested by
 calling class methods on MagicMock instances.
 """
+import ast
+import os
 import unittest
 from unittest.mock import MagicMock, patch, call
 from datetime import datetime, timedelta
@@ -257,13 +259,17 @@ class TestShrinkageSqlPath(unittest.TestCase):
     """Test _compute_shrinkage_value SQL + read_group path."""
 
     def _make_dashboard(self, sql_total_lost, quant_read_group_result):
-        """Return a dashboard mock with env wired for _compute_shrinkage_value."""
+        """Return a dashboard mock with env wired for _compute_shrinkage_value.
+
+        quant_read_group_result must be in _read_group format: list of tuples,
+        e.g. [(1000.0,)] for a single aggregate result.
+        """
         from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
         dashboard = MagicMock(spec=MfKpiDashboard)
         env = MagicMock()
 
         quant_mock = MagicMock()
-        quant_mock.read_group.return_value = quant_read_group_result
+        quant_mock._read_group.return_value = quant_read_group_result
         env.__getitem__ = MagicMock(side_effect=lambda key: {
             'stock.quant': quant_mock,
         }.get(key, MagicMock()))
@@ -276,7 +282,7 @@ class TestShrinkageSqlPath(unittest.TestCase):
         return dashboard
 
     def test_no_stock_returns_zero(self):
-        """When total_stock is 0 (empty read_group), denominator defaults to 1.0 → not division error."""
+        """When total_stock is 0 (empty _read_group), denominator defaults to 1.0 → not division error."""
         from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
         dashboard = self._make_dashboard(sql_total_lost=0, quant_read_group_result=[])
         result = MfKpiDashboard._compute_shrinkage_value(dashboard)
@@ -287,7 +293,7 @@ class TestShrinkageSqlPath(unittest.TestCase):
         from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
         dashboard = self._make_dashboard(
             sql_total_lost=50,
-            quant_read_group_result=[{'quantity': 1000}],
+            quant_read_group_result=[(1000.0,)],
         )
         result = MfKpiDashboard._compute_shrinkage_value(dashboard)
         self.assertAlmostEqual(result, 5.0)
@@ -297,25 +303,30 @@ class TestShrinkageSqlPath(unittest.TestCase):
         from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
         dashboard = self._make_dashboard(
             sql_total_lost=10,
-            quant_read_group_result=[{'quantity': 500}],
+            quant_read_group_result=[(500.0,)],
         )
         MfKpiDashboard._compute_shrinkage_value(dashboard)
         dashboard.env.cr.execute.assert_called_once()
 
 
 class TestIraDistinctProducts(unittest.TestCase):
-    """Test _compute_ira_value uses read_group for distinct-product counting."""
+    """Test _compute_ira_value uses _read_group for distinct-product counting."""
 
     def _make_dashboard(self, quant_groups, discrepancy_groups):
-        """Return a dashboard mock wired for _compute_ira_value."""
+        """Return a dashboard mock wired for _compute_ira_value.
+
+        quant_groups and discrepancy_groups must be in _read_group format:
+        list of tuples — one tuple per group, e.g. [(prod_record, 1), ...].
+        _compute_ira_value only calls len() on these, so any list of tuples works.
+        """
         from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
         dashboard = MagicMock(spec=MfKpiDashboard)
         env = MagicMock()
 
         quant_mock = MagicMock()
-        quant_mock.read_group.return_value = quant_groups
+        quant_mock._read_group.return_value = quant_groups
         discrepancy_mock = MagicMock()
-        discrepancy_mock.read_group.return_value = discrepancy_groups
+        discrepancy_mock._read_group.return_value = discrepancy_groups
         env.__getitem__ = MagicMock(side_effect=lambda key: {
             'stock.quant': quant_mock,
             'mf.soh.discrepancy': discrepancy_mock,
@@ -335,7 +346,8 @@ class TestIraDistinctProducts(unittest.TestCase):
     def test_no_discrepancies_returns_100(self):
         """10 distinct SKUs tracked, 0 discrepancies → 100.0%."""
         from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
-        quant_groups = [{'product_id': (i, f'P{i}'), 'product_id_count': 1} for i in range(10)]
+        # _read_group returns one tuple per group; content doesn't matter — only len() is used
+        quant_groups = [(MagicMock(), 1) for _ in range(10)]
         dashboard = self._make_dashboard(quant_groups=quant_groups, discrepancy_groups=[])
         since = datetime(2026, 1, 1)
         result = MfKpiDashboard._compute_ira_value(dashboard, since, 0.005)
@@ -344,11 +356,8 @@ class TestIraDistinctProducts(unittest.TestCase):
     def test_distinct_product_ira_calculation(self):
         """10 distinct SKUs, 2 with open discrepancy → 80.0%."""
         from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
-        quant_groups = [{'product_id': (i, f'P{i}'), 'product_id_count': 1} for i in range(10)]
-        discrepancy_groups = [
-            {'product_id': (1, 'P1'), 'product_id_count': 1},
-            {'product_id': (2, 'P2'), 'product_id_count': 1},
-        ]
+        quant_groups = [(MagicMock(), 1) for _ in range(10)]
+        discrepancy_groups = [(MagicMock(), 1), (MagicMock(), 1)]
         dashboard = self._make_dashboard(
             quant_groups=quant_groups,
             discrepancy_groups=discrepancy_groups,
@@ -360,12 +369,8 @@ class TestIraDistinctProducts(unittest.TestCase):
     def test_ira_clamped_at_zero(self):
         """More discrepancies than SKUs (edge case) → clamped to 0.0, not negative."""
         from odoo.addons.stock_3pl_mainfreight.models.kpi_dashboard import MfKpiDashboard
-        quant_groups = [{'product_id': (1, 'P1'), 'product_id_count': 1}]
-        discrepancy_groups = [
-            {'product_id': (1, 'P1'), 'product_id_count': 1},
-            {'product_id': (2, 'P2'), 'product_id_count': 1},
-            {'product_id': (3, 'P3'), 'product_id_count': 1},
-        ]
+        quant_groups = [(MagicMock(), 1)]
+        discrepancy_groups = [(MagicMock(), 1), (MagicMock(), 1), (MagicMock(), 1)]
         dashboard = self._make_dashboard(
             quant_groups=quant_groups,
             discrepancy_groups=discrepancy_groups,
@@ -373,3 +378,54 @@ class TestIraDistinctProducts(unittest.TestCase):
         since = datetime(2026, 1, 1)
         result = MfKpiDashboard._compute_ira_value(dashboard, since, 0.005)
         self.assertEqual(result, 0.0)
+
+
+class TestKpiDashboardNoDeprecatedReadGroup(unittest.TestCase):
+    """AST-based guard: kpi_dashboard.py must not use the deprecated read_group() API."""
+
+    @classmethod
+    def _src_path(cls):
+        return os.path.join(
+            os.path.dirname(__file__), '..', 'models', 'kpi_dashboard.py'
+        )
+
+    @classmethod
+    def _parsed_source(cls):
+        with open(cls._src_path(), encoding='utf-8') as f:
+            return f.read(), ast.parse(f.read() if False else open(cls._src_path()).read())
+
+    def test_kpi_dashboard_uses_no_deprecated_read_group(self):
+        """kpi_dashboard.py must not use the deprecated .read_group() API."""
+        source, tree = self._parsed_source()
+        violations = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == 'read_group'
+                and not isinstance(node.ctx, ast.Store)
+            ):
+                violations.append(f"Line {node.lineno}: .read_group() call found")
+
+        self.assertFalse(
+            violations,
+            "kpi_dashboard.py still uses deprecated read_group():\n"
+            + "\n".join(violations)
+            + "\nMigrate to ._read_group(domain, groupby, aggregates)",
+        )
+
+    def test_kpi_dashboard_uses_private_read_group(self):
+        """kpi_dashboard.py must use ._read_group() (private API, Odoo 19+)."""
+        source, tree = self._parsed_source()
+        private_calls = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == '_read_group'
+            ):
+                private_calls.append(node.lineno)
+
+        self.assertGreaterEqual(
+            len(private_calls),
+            3,
+            f"Expected at least 3 calls to ._read_group(), found {len(private_calls)}: lines {private_calls}",
+        )

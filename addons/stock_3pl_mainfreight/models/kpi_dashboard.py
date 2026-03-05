@@ -202,24 +202,24 @@ class MfKpiDashboard(models.AbstractModel):
         Numerator deduction: distinct products with an open discrepancy exceeding tolerance.
         """
         # Count distinct products tracked in internal stock
-        quant_groups = self.env['stock.quant'].read_group(
-            [('location_id.usage', '=', 'internal'), ('quantity', '>', 0)],
-            ['product_id'],
-            ['product_id'],
+        quant_groups = self.env['stock.quant']._read_group(
+            domain=[('location_id.usage', '=', 'internal'), ('quantity', '>', 0)],
+            groupby=['product_id'],
+            aggregates=['__count'],
         )
         total_skus = len(quant_groups)
         if not total_skus:
             return 100.0
 
         # Count distinct products with an open discrepancy exceeding tolerance
-        discrepancy_groups = self.env['mf.soh.discrepancy'].read_group(
-            [
+        discrepancy_groups = self.env['mf.soh.discrepancy']._read_group(
+            domain=[
                 ('state', '=', 'open'),
                 ('detected_date', '>=', since),
                 ('variance_pct', '>', tolerance * 100),
             ],
-            ['product_id'],
-            ['product_id'],
+            groupby=['product_id'],
+            aggregates=['__count'],
         )
         skus_with_discrepancy = len(discrepancy_groups)
 
@@ -261,12 +261,13 @@ class MfKpiDashboard(models.AbstractModel):
         total_lost = self.env.cr.fetchone()[0]
 
         # Total inventory from internal locations
-        result = self.env['stock.quant'].read_group(
-            [('location_id.usage', '=', 'internal'), ('quantity', '>', 0)],
-            ['quantity'],
-            [],
+        result = self.env['stock.quant']._read_group(
+            domain=[('location_id.usage', '=', 'internal'), ('quantity', '>', 0)],
+            groupby=[],
+            aggregates=['quantity:sum'],
         )
-        total_stock = float(result[0]['quantity']) if result and result[0]['quantity'] else 1.0
+        # _read_group with groupby=[] returns [(sum_val,)] — one tuple with one element per aggregate
+        total_stock = float(result[0][0]) if result and result[0][0] else 1.0
         return round(float(total_lost) / total_stock * 100, 3)
 
     @api.model
