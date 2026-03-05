@@ -1,0 +1,5 @@
+# stock_3pl_core / stock_3pl_mainfreight Python dependencies.
+# Install with: pip install -r requirements.txt
+
+# SFTP transport (SFTPTransport in stock_3pl_core/transport/sftp.py)
+paramiko>=2.10.0
