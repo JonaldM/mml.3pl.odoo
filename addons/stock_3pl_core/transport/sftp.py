@@ -67,10 +67,9 @@ class SftpTransport(AbstractTransport):
             ssh._host_keys_filename = None
             ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
         else:
-            # Warn-only mode: log a WARNING for unknown host keys so MITM attempts
-            # are visible in Odoo logs. Set sftp_host_key on the connector to enforce
-            # strict verification.
-            ssh.set_missing_host_key_policy(_WarnOnNewHostKeyPolicy())
+            # Fail-secure: reject connections when no host key is configured.
+            # Set sftp_host_key on the connector to allow SFTP connections.
+            ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
 
         ssh.connect(
             hostname=self.connector.sftp_host,

@@ -98,7 +98,4 @@ def decrypt_credential(env, value: str) -> str:
             'decrypt_credential: failed to decrypt — key may have changed. '
             'Re-enter credentials on the connector. Error: %s', exc
         )
-        raise UserError(
-            'Credential decryption failed. The encryption key may have changed. '
-            'Re-enter credentials on the connector.'
-        ) from exc
+        return ''
