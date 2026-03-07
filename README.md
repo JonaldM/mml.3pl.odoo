@@ -320,7 +320,7 @@ python odoo-bin -u stock_3pl_core,stock_3pl_mainfreight \
 
 The `conftest.py` at the repo root automatically marks any test class that imports from `odoo.tests` with the `odoo_integration` pytest marker, so the `-m "not odoo_integration"` filter works without decorating individual files.
 
-Sprint 1 delivered 44 pure-Python tests. Sprint 2 extended to 100 tests adding haversine, route engine, split engine, cross-border detection, and push cron coverage. Sprint 3 brought the total to 228 tests covering tracking cron, inbound cron, SOH cross-check, credential encryption, SFTP host key verification, and the Freightways transport adapter. The inbound processing fixes extended the suite to 312 tests. The API gap sprint added dual-schema parser tests, dual tracking map tests, REST CRUD method tests, webhook secret validation tests, and delete-ref tests, bringing the total to **357 pure-Python tests**. 90 Odoo integration tests require `odoo-bin` and are tagged `odoo_integration`.
+Sprint 1 delivered 44 pure-Python tests. Sprint 2 extended to 100 tests adding haversine, route engine, split engine, cross-border detection, and push cron coverage. Sprint 3 brought the total to 228 tests covering tracking cron, inbound cron, SOH cross-check, credential encryption, SFTP host key verification, and the Freightways transport adapter. The inbound processing fixes extended the suite to 312 tests. The API gap sprint added dual-schema parser tests, dual tracking map tests, REST CRUD method tests, webhook secret validation tests, and delete-ref tests. Production-readiness hardening (SFTP `RejectPolicy`, inventory adjustment via `action_apply_inventory`, views cleanup) brings the total to **363 pure-Python tests**. 90 Odoo integration tests require `odoo-bin` and are tagged `odoo_integration`.
 
 ## Development
 
@@ -387,7 +387,7 @@ OPL-1. See individual `__manifest__.py` files for per-module licensing.
 
 ## Contributing
 
-Raise a pull request against `master`. Run the pure-Python test suite (`pytest -m "not odoo_integration" -q`) before submitting — all 357 tests must pass.
+Raise a pull request against `master`. Run the pure-Python test suite (`pytest -m "not odoo_integration" -q`) before submitting — all 363 tests must pass.
 
 ### Known Limitations
 
