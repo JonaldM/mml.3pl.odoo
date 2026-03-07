@@ -83,8 +83,11 @@ class TestSohDiscrepancyModel(unittest.TestCase):
             'stock.quant': quant_model,
         }.get(k, MagicMock()))
         MfSohDiscrepancy.action_accept_discrepancy(record, reason='Confirmed shrinkage')
-        # Quant list should have sudo().write() called on it (not quant[0])
-        quant_list.sudo.return_value.write.assert_called_once_with({'quantity': 95.0})
+        # Quant adjustment via inventory_quantity + action_apply_inventory (not direct write)
+        quant_sudo = quant_list.sudo.return_value
+        self.assertEqual(quant_sudo.inventory_quantity, 95.0)
+        quant_sudo.action_apply_inventory.assert_called_once()
+        quant_sudo.write.assert_not_called()
         # Record state should be updated
         record.write.assert_called_once()
         write_vals = record.write.call_args[0][0]

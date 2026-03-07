@@ -133,19 +133,26 @@ class InventoryReportDocument(AbstractDocument):
         self.apply_csv(payload, report_date=message.report_date)
 
     def _sync_quant(self, product, location, quantity):
-        """Upsert a stock.quant record for the given product/location."""
+        """Adjust stock to the given quantity via Odoo's inventory adjustment mechanism.
+
+        Uses inventory_quantity + action_apply_inventory() instead of a direct
+        write to stock.quant.quantity. This creates a stock.move of type
+        'inventory' so the adjustment appears in move history and valuation
+        reports, matching the behaviour of a manual inventory count in the UI.
+        """
         quant = self.env['stock.quant'].search([
             ('product_id', '=', product.id),
             ('location_id', '=', location.id),
         ], limit=1)
-        if quant:
-            quant.sudo().write({'quantity': quantity})
-        else:
-            self.env['stock.quant'].sudo().create({
+        if not quant:
+            quant = self.env['stock.quant'].sudo().create({
                 'product_id': product.id,
                 'location_id': location.id,
-                'quantity': quantity,
+                'quantity': 0.0,
             })
+        quant = quant.sudo()
+        quant.inventory_quantity = quantity
+        quant.action_apply_inventory()
 
     def _write_discrepancy(self, product, mf_qty: float, odoo_qty: float):
         """Create or update an mf.soh.discrepancy record for this product.

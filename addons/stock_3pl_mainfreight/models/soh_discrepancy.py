@@ -75,20 +75,23 @@ class MfSohDiscrepancy(models.Model):
             raise UserError(
                 f'{self.product_id.display_name} discrepancy is already accepted as shrinkage.'
             )
-        # Update Odoo quant to match MF (MF is source of truth)
+        # Update Odoo quant to match MF via inventory adjustment (MF is source of truth).
+        # Uses inventory_quantity + action_apply_inventory() to create a stock.move
+        # of type 'inventory' so the change appears in move history and valuation reports.
         stock_location = self.warehouse_id.lot_stock_id
-        quants = self.env['stock.quant'].search([
+        quant = self.env['stock.quant'].search([
             ('product_id', '=', self.product_id.id),
             ('location_id', '=', stock_location.id),
         ], limit=1)
-        if quants:
-            quants.sudo().write({'quantity': self.mf_qty})
-        else:
-            self.env['stock.quant'].sudo().create({
+        if not quant:
+            quant = self.env['stock.quant'].sudo().create({
                 'product_id': self.product_id.id,
                 'location_id': stock_location.id,
-                'quantity': self.mf_qty,
+                'quantity': 0.0,
             })
+        quant = quant.sudo()
+        quant.inventory_quantity = self.mf_qty
+        quant.action_apply_inventory()
         self.write({
             'state': 'accepted',
             'accepted_by': self.env.user.id,
