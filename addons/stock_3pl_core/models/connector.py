@@ -140,10 +140,24 @@ class ThreePlConnector(models.Model):
         self.ensure_one()
         if self.transport == 'rest_api':
             if self.warehouse_partner == 'mainfreight':
-                from odoo.addons.stock_3pl_mainfreight.transport.mainfreight_rest import MainfreightRestTransport
+                try:
+                    from odoo.addons.stock_3pl_mainfreight.transport.mainfreight_rest import MainfreightRestTransport
+                except ImportError:
+                    from odoo.exceptions import UserError
+                    raise UserError(
+                        'Connector "%s" requires the stock_3pl_mainfreight module to be installed '
+                        'for Mainfreight REST transport.' % self.name
+                    )
                 return MainfreightRestTransport(self)
             if self.warehouse_partner == 'freightways':
-                from odoo.addons.stock_3pl_mainfreight.transport.freightways_rest import FreightwaysRestTransport
+                try:
+                    from odoo.addons.stock_3pl_mainfreight.transport.freightways_rest import FreightwaysRestTransport
+                except ImportError:
+                    from odoo.exceptions import UserError
+                    raise UserError(
+                        'Connector "%s" requires the stock_3pl_mainfreight module to be installed '
+                        'for Freightways REST transport.' % self.name
+                    )
                 return FreightwaysRestTransport(self)
             from odoo.addons.stock_3pl_core.transport.rest_api import RestTransport
             return RestTransport(self)
