@@ -10,16 +10,19 @@ class InwardOrderDocument(AbstractDocument):
     document_type = 'inward_order'
     format = 'xml'
 
-    def build_outbound(self, booking, action='create'):
+    def build_outbound(self, booking, action='create', po=None):
         """Build Mainfreight InwardOrder XML for a freight.booking record.
 
         action: 'create' or 'update'
+        po: the specific purchase.order to build for (required — freight.booking has
+            po_ids as a Many2many, not a singular purchase_order_id field). Falls back
+            to po_ids[:1] for callers that do not specify a PO.
         """
         if action not in ('create', 'update'):
             raise ValueError(f"InwardOrderDocument.build_outbound: invalid action {action!r}")
         _logger.debug('Building InwardOrder XML for booking %s (action=%s)', booking.name, action)
 
-        po        = booking.purchase_order_id
+        po        = po or (booking.po_ids[:1] if booking.po_ids else None)
         warehouse = (po.picking_type_id.warehouse_id if po and po.picking_type_id else None)
         wh_partner = warehouse.partner_id if warehouse else None
         wh_code    = getattr(self.connector, 'warehouse_code', '') or ''

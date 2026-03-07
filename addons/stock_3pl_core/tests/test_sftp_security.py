@@ -98,8 +98,8 @@ def _make_paramiko_mock():
 # Test cases
 # ---------------------------------------------------------------------------
 
-class TestNoHostKeyUsesWarnPolicy(unittest.TestCase):
-    """When sftp_host_key is empty/falsy, _WarnOnNewHostKeyPolicy must be used."""
+class TestNoHostKeyUsesRejectPolicy(unittest.TestCase):
+    """When sftp_host_key is empty/falsy, RejectPolicy (fail-secure) must be used."""
 
     def _run_for_value(self, key_value):
         connector = _make_connector(sftp_host_key=key_value)
@@ -109,25 +109,27 @@ class TestNoHostKeyUsesWarnPolicy(unittest.TestCase):
         with patch.dict(sys.modules, {'paramiko': pm}):
             transport._get_client()
 
-        # _WarnOnNewHostKeyPolicy instance was passed to set_missing_host_key_policy
+        # RejectPolicy() was instantiated and passed to set_missing_host_key_policy
+        pm.RejectPolicy.assert_called_once()
+        reject_instance = pm.RejectPolicy.return_value
         calls = ssh_instance.set_missing_host_key_policy.call_args_list
         self.assertEqual(len(calls), 1)
-        policy_arg = calls[0][0][0]
-        self.assertIsInstance(policy_arg, _WarnOnNewHostKeyPolicy)
+        self.assertEqual(calls[0][0][0], reject_instance)
 
-        # RejectPolicy must NOT have been instantiated
-        pm.RejectPolicy.assert_not_called()
+        # _WarnOnNewHostKeyPolicy must NOT have been used (it is never safe)
+        policy_arg = calls[0][0][0]
+        self.assertNotIsInstance(policy_arg, _WarnOnNewHostKeyPolicy)
 
         # HostKeys must NOT have been instantiated (no temp file work)
         pm.HostKeys.assert_not_called()
 
-    def test_empty_string_uses_warn_policy(self):
+    def test_empty_string_uses_reject_policy(self):
         self._run_for_value('')
 
-    def test_none_uses_warn_policy(self):
+    def test_none_uses_reject_policy(self):
         self._run_for_value(None)
 
-    def test_false_uses_warn_policy(self):
+    def test_false_uses_reject_policy(self):
         self._run_for_value(False)
 
 
