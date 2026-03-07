@@ -18,8 +18,7 @@
                 <field name="write_date"/>
                 <field name="move_ids"/>
 
-                <progressbar field="x_mf_status"
-                             colors='{"mf_exception": "danger"}'/>
+                <progressbar field="x_mf_status"/>
 
                 <templates>
                     <t t-name="kanban-box">
