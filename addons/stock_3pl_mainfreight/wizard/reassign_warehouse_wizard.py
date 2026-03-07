@@ -11,7 +11,7 @@ class MfReassignWarehouseWizard(models.TransientModel):
     connector_id = fields.Many2one(
         '3pl.connector', 'Target Connector / Warehouse',
         required=True,
-        domain=[('active', '=', True)],
+        domain="[('active', '=', True)]",
     )
     reason = fields.Text('Reason')
 

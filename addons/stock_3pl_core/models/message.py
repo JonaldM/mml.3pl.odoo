@@ -45,6 +45,7 @@ class ThreePlMessage(models.Model):
     _description = '3PL Message Queue'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'create_date desc'
+    _rec_name = 'idempotency_key'
 
     connector_id = fields.Many2one('3pl.connector', required=True, ondelete='cascade')
     direction = fields.Selection(DIRECTION, required=True)

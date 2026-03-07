@@ -3,3 +3,5 @@ access_3pl_connector_manager,3pl.connector manager,model_3pl_connector,stock.gro
 access_3pl_connector_user,3pl.connector user,model_3pl_connector,stock.group_stock_user,1,0,0,0
 access_3pl_message_manager,3pl.message manager,model_3pl_message,stock.group_stock_manager,1,1,1,1
 access_3pl_message_user,3pl.message user,model_3pl_message,stock.group_stock_user,1,0,0,0
+access_stock_3pl_manual_sync_wizard_manager,stock_3pl.manual_sync_wizard manager,model_stock_3pl_manual_sync_wizard,stock.group_stock_manager,1,1,1,1
+access_stock_3pl_inbound_simulator_manager,stock_3pl.inbound_simulator manager,model_stock_3pl_inbound_simulator,stock.group_stock_manager,1,1,1,1

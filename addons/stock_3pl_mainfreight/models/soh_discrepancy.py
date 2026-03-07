@@ -18,6 +18,7 @@ class MfSohDiscrepancy(models.Model):
     _name = 'mf.soh.discrepancy'
     _description = 'MF SOH Discrepancy'
     _order = 'detected_date desc'
+    _rec_name = 'product_id'
 
     product_id = fields.Many2one('product.product', 'Product', required=True, index=True)
     warehouse_id = fields.Many2one('stock.warehouse', 'Warehouse', required=True, index=True)

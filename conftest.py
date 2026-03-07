@@ -7,7 +7,10 @@ import sys
 import types
 import pathlib
 import importlib.util
+import builtins
 import pytest
+
+builtins._ = lambda s: s
 
 # Ensure the addons directory is on sys.path so direct imports work
 _ROOT = pathlib.Path(__file__).parent
