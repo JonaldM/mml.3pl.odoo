@@ -34,7 +34,7 @@
         <field name="name">stock.picking.mf_exception.tree</field>
         <field name="model">stock.picking</field>
         <field name="arch" type="xml">
-            <tree string="MF Exceptions" decoration-danger="True" default_order="write_date desc">
+            <list string="MF Exceptions" decoration-danger="True" default_order="write_date desc">
                 <field name="name" string="SO / Reference"/>
                 <field name="partner_id" string="Partner"/>
                 <field name="picking_type_id" string="Operation"/>
@@ -42,7 +42,7 @@
                 <field name="x_mf_assigned_to" string="Assigned To" optional="show"/>
                 <field name="write_date" string="Exception Date"/>
                 <field name="x_mf_status" invisible="1"/>
-            </tree>
+            </list>
         </field>
     </record>
 

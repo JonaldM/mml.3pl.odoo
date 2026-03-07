@@ -4,6 +4,7 @@
     'category': 'Inventory/Inventory',
     'summary': 'Mainfreight Warehousing 3PL integration',
     'author': 'MML',
+    'web_icon': 'stock_3pl_mainfreight,static/description/icon.png',
     'license': 'OPL-1',
     'depends': ['stock_3pl_core'],
     'data': [

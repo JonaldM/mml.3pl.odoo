@@ -109,7 +109,7 @@
         <field name="name">3pl.connector.tree</field>
         <field name="model">3pl.connector</field>
         <field name="arch" type="xml">
-            <tree string="3PL Connectors">
+            <list string="3PL Connectors">
                 <field name="name"/>
                 <field name="warehouse_id"/>
                 <field name="warehouse_partner"/>
@@ -117,7 +117,7 @@
                 <field name="environment"/>
                 <field name="active"/>
                 <field name="priority"/>
-            </tree>
+            </list>
         </field>
     </record>
 

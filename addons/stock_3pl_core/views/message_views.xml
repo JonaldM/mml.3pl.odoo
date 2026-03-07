@@ -8,7 +8,7 @@
         <field name="name">3pl.message.tree</field>
         <field name="model">3pl.message</field>
         <field name="arch" type="xml">
-            <tree string="3PL Message Queue"
+            <list string="3PL Message Queue"
                   decoration-danger="state == 'dead'"
                   decoration-warning="retry_count &gt; 0">
                 <field name="create_date" string="Created"/>
@@ -19,7 +19,7 @@
                 <field name="state"/>
                 <field name="retry_count"/>
                 <field name="warehouse_partner_ref"/>
-            </tree>
+            </list>
         </field>
     </record>
 

@@ -5,7 +5,7 @@
         <field name="name">mf.soh.discrepancy.tree</field>
         <field name="model">mf.soh.discrepancy</field>
         <field name="arch" type="xml">
-            <tree string="Inventory Discrepancies"
+            <list string="Inventory Discrepancies"
                   decoration-danger="variance_pct &gt; 5"
                   decoration-warning="variance_pct &gt; 1 and variance_pct &lt;= 5">
                 <field name="product_id"/>
@@ -16,7 +16,7 @@
                 <field name="variance_pct" string="Variance %" widget="percentage"/>
                 <field name="detected_date" string="Detected"/>
                 <field name="state"/>
-            </tree>
+            </list>
         </field>
     </record>
 
