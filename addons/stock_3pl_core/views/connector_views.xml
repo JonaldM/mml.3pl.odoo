@@ -54,7 +54,7 @@
                     <notebook>
                         <!-- REST API page -->
                         <page string="REST API"
-                              attrs="{'invisible': [('transport', '!=', 'rest_api')]}">
+                              invisible="transport != 'rest_api'">
                             <group>
                                 <field name="api_url" string="API URL"/>
                                 <field name="api_secret" string="API Secret" password="True"/>
@@ -63,7 +63,7 @@
 
                         <!-- SFTP page -->
                         <page string="SFTP"
-                              attrs="{'invisible': [('transport', '!=', 'sftp')]}">
+                              invisible="transport != 'sftp'">
                             <group>
                                 <field name="sftp_host" string="Host"/>
                                 <field name="sftp_port" string="Port"/>
@@ -75,13 +75,13 @@
                             <group string="Host Key Verification">
                                 <field name="sftp_host_key" widget="text"
                                        placeholder="hostname key-type base64-key  (from ssh-keyscan)"
-                                       attrs="{'invisible': [('transport', '!=', 'sftp')]}"/>
+                                       invisible="transport != 'sftp'"/>
                             </group>
                         </page>
 
                         <!-- HTTP POST page -->
                         <page string="HTTP POST"
-                              attrs="{'invisible': [('transport', '!=', 'http_post')]}">
+                              invisible="transport != 'http_post'">
                             <group>
                                 <field name="http_post_url" string="HTTP POST URL"/>
                                 <field name="http_transport_name" string="Transport Name (UniqueID)"/>

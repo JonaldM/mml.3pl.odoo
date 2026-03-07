@@ -36,7 +36,7 @@
                             string="Requeue"
                             type="object"
                             class="btn-warning"
-                            attrs="{'invisible': [('state', '!=', 'dead')]}"/>
+                            invisible="state != 'dead'"/>
                     <field name="state"
                            widget="statusbar"
                            statusbar_visible="draft,queued,sending,sent,acknowledged,done,dead"/>
@@ -62,20 +62,20 @@
 
                     <!-- Error group — only shown when there is an error -->
                     <group string="Last Error"
-                           attrs="{'invisible': [('last_error', '=', False)]}">
+                           invisible="not last_error">
                         <field name="last_error" nolabel="1"/>
                     </group>
 
                     <notebook>
                         <!-- XML Payload -->
                         <page string="XML Payload"
-                              attrs="{'invisible': [('payload_xml', '=', False)]}">
+                              invisible="not payload_xml">
                             <field name="payload_xml" widget="code" nolabel="1"/>
                         </page>
 
                         <!-- CSV Payload -->
                         <page string="CSV Payload"
-                              attrs="{'invisible': [('payload_csv', '=', False)]}">
+                              invisible="not payload_csv">
                             <field name="payload_csv" widget="code" nolabel="1"/>
                         </page>
                     </notebook>

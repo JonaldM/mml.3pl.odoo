@@ -11,9 +11,9 @@
                 <group string="Mainfreight Routing">
                     <field name="x_mf_enabled"/>
                     <field name="x_mf_latitude"
-                           attrs="{'invisible': [('x_mf_enabled', '=', False)]}"/>
+                           invisible="not x_mf_enabled"/>
                     <field name="x_mf_longitude"
-                           attrs="{'invisible': [('x_mf_enabled', '=', False)]}"/>
+                           invisible="not x_mf_enabled"/>
                 </group>
             </xpath>
         </field>

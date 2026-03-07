@@ -14,37 +14,37 @@
                         type="object"
                         string="Approve Cross-Border Dispatch"
                         class="btn-warning"
-                        attrs="{'invisible': [('x_mf_status', '!=', 'mf_held_review')]}"/>
+                        invisible="x_mf_status != 'mf_held_review'"/>
             </xpath>
 
             <!-- MF status statusbar -->
             <xpath expr="//field[@name='state']" position="after">
                 <field name="x_mf_status" widget="statusbar"
                        statusbar_visible="mf_queued,mf_sent,mf_received,mf_dispatched,mf_delivered"
-                       attrs="{'invisible': [('x_mf_status', '=', False)]}"/>
+                       invisible="not x_mf_status"/>
             </xpath>
 
             <!-- MF details tab — only shown when this picking has MF routing -->
             <xpath expr="//page[@name='additional_info']" position="before">
                 <page string="Mainfreight"
-                      attrs="{'invisible': [('x_mf_status', '=', False)]}">
+                      invisible="not x_mf_status">
                     <group>
                         <group>
                             <field name="x_mf_status"/>
                             <field name="x_mf_routed_by"/>
                             <field name="x_mf_cross_border"/>
                             <field name="x_mf_assigned_to"
-                                   attrs="{'invisible': [('x_mf_status', 'not in', ['mf_exception', 'mf_resolved'])]}"/>
+                                   invisible="x_mf_status not in ('mf_exception', 'mf_resolved')"/>
                         </group>
                         <group>
                             <field name="x_mf_connote"
-                                   attrs="{'invisible': [('x_mf_connote', '=', False)]}"/>
+                                   invisible="not x_mf_connote"/>
                             <field name="x_mf_dispatched_date"
-                                   attrs="{'invisible': [('x_mf_dispatched_date', '=', False)]}"/>
+                                   invisible="not x_mf_dispatched_date"/>
                             <field name="x_mf_delivered_date"
-                                   attrs="{'invisible': [('x_mf_delivered_date', '=', False)]}"/>
+                                   invisible="not x_mf_delivered_date"/>
                             <field name="x_mf_pod_url"
-                                   attrs="{'invisible': [('x_mf_pod_url', '=', False)]}"/>
+                                   invisible="not x_mf_pod_url"/>
                         </group>
                     </group>
                 </page>

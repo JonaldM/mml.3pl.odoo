@@ -57,20 +57,20 @@
                         string="Retry"
                         type="object"
                         class="btn-primary"
-                        attrs="{'invisible': [('x_mf_status', '!=', 'mf_exception')]}"/>
+                        invisible="x_mf_status != 'mf_exception'"/>
                 <button name="%(action_mf_reassign_wizard)d"
                         string="Reassign Warehouse"
                         type="action"
-                        attrs="{'invisible': [('x_mf_status', 'not in', ['mf_exception', 'mf_held_review'])]}"/>
+                        invisible="x_mf_status not in ('mf_exception', 'mf_held_review')"/>
                 <button name="action_mf_mark_resolved"
                         string="Mark Resolved"
                         type="object"
-                        attrs="{'invisible': [('x_mf_status', '!=', 'mf_exception')]}"/>
+                        invisible="x_mf_status != 'mf_exception'"/>
                 <button name="action_mf_escalate"
                         string="Escalate"
                         type="object"
                         class="btn-warning"
-                        attrs="{'invisible': [('x_mf_status', 'not in', ['mf_exception', 'mf_held_review'])]}"/>
+                        invisible="x_mf_status not in ('mf_exception', 'mf_held_review')"/>
             </xpath>
 
         </field>

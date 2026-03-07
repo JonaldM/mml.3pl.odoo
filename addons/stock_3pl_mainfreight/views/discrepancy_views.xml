@@ -63,12 +63,12 @@
                     <button name="action_mark_investigated"
                             string="Mark Investigated"
                             type="object"
-                            attrs="{'invisible': [('state', '!=', 'open')]}"/>
+                            invisible="state != 'open'"/>
                     <button name="action_open_accept_wizard"
                             string="Accept as Shrinkage"
                             type="object"
                             class="btn-warning"
-                            attrs="{'invisible': [('state', '=', 'accepted')]}"/>
+                            invisible="state == 'accepted'"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="open,investigated,accepted"/>
                 </header>
@@ -91,7 +91,7 @@
                         <field name="investigated_date" readonly="1"/>
                     </group>
                     <group string="Acceptance"
-                           attrs="{'invisible': [('state', '!=', 'accepted')]}">
+                           invisible="state != 'accepted'">
                         <field name="accepted_by" readonly="1"/>
                         <field name="accepted_date" readonly="1"/>
                         <field name="accept_reason" readonly="1"/>
