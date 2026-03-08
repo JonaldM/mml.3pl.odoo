@@ -277,3 +277,10 @@ Sprint 2 Odoo integration tests are in `test_routing_integration.py` and skipped
 
 - Webhook controller stubs are not yet wired to the message queue (pending cloud hosting decision)
 - `stock_3pl.manual_sync_wizard` and `stock_3pl.inbound_simulator` are Phase 2 stubs with no implementation
+
+## Available Commands
+
+- `/plan` — implementation plan before Sprint 2+ features (webhooks, routing, KPI extensions)
+- `/tdd` — write structural tests first; use `pytest -m "not odoo_integration" -q`
+- `/code-review` — review document builders, parsers, and cron logic before production use
+- `/security-scan` — check HMAC validation, Fernet credential encryption, SFTP path safety

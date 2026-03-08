@@ -42,5 +42,6 @@ class MFWebhookController(http.Controller):
             return request.make_json_response({'error': 'unauthorized'}, status=401)
         body = request.httprequest.data.decode('utf-8', errors='replace')
         _logger.debug('MF webhook %s received (%d bytes)', event_type, len(body))
-        # TODO: wire to inbound message queue when on cloud hosting
+        # Wire to inbound message queue once cloud hosting is confirmed (currently
+        # MF delivers via SFTP poll; webhooks are a future push-delivery option).
         return request.make_json_response({'status': 'received'})

@@ -62,7 +62,7 @@ class SOConfirmationDocument(AbstractDocument):
 
         customerOrderReference is the Odoo SO name (maps to 'reference').
         orderReference is the MF internal reference — used as fallback only.
-        TODO: expand field coverage when webhook is activated on cloud hosting.
+        Expand field coverage once the webhook path is activated on cloud hosting.
         """
         lines = []
         for line_el in root.findall('.//orderConfirmationLine'):

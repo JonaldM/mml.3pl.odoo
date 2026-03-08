@@ -1,11 +1,12 @@
 {
     'name': '3PL Integration \u2014 Mainfreight',
-    'version': '19.0.2.0.0',
+    'version': '19.0.1.0.0',
     'category': 'Inventory/Inventory',
     'summary': 'Mainfreight Warehousing 3PL integration',
-    'author': 'MML',
+    'author': 'MML Consumer Products Ltd',
+    'website': 'https://www.mmlconsumerproducts.co.nz',
     'web_icon': 'stock_3pl_mainfreight,static/description/icon.png',
-    'license': 'OPL-1',
+    'license': 'LGPL-3',
     'depends': ['stock_3pl_core'],
     'data': [
         'security/ir.model.access.csv',
