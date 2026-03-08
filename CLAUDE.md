@@ -171,6 +171,7 @@ Returns `NullService` (no-op) if `stock_3pl_core` is not installed.
 | `stock_3pl_mainfreight.webhook_secret` | — | HMAC secret for `/mf/webhook/*` |
 | `stock_3pl_mainfreight.reconcile_hours` | `48` | Hours before stale `mf_sent` picking → `mf_exception` |
 | `mml.cron_alert_email` | — | Email for cron failure alerts |
+| `mml_3pl.last_alert.<module>` | — | ISO timestamp of last alert sent for `<module>`; used by `_send_cron_alert` rate-limiting (1h cooldown) |
 | `stock_3pl_mainfreight.kpi_difot_target` | `95` | DIFOT green threshold % |
 | `stock_3pl_mainfreight.kpi_ira_target` | `98` | IRA green threshold % |
 | `stock_3pl_mainfreight.kpi_exception_rate_target` | `2` | Exception rate green threshold % |
