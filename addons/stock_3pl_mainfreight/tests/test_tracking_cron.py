@@ -717,5 +717,135 @@ class TestRunMFTrackingNoConnector(unittest.TestCase):
         self.assertEqual(call_count['n'], 2)
 
 
+# ---------------------------------------------------------------------------
+# Tests: _send_cron_alert — rate-limiting and XSS escaping
+# ---------------------------------------------------------------------------
+
+class TestSendCronAlertRateLimiting(unittest.TestCase):
+    """_send_cron_alert must suppress duplicate alerts within the cooldown window
+    and escape HTML in the body."""
+
+    def _make_cron_with_icp(self, icp_params):
+        """Build a cron instance where ir.config_parameter returns values from icp_params dict."""
+        cron = object.__new__(MFTrackingCron)
+        env = MagicMock()
+
+        icp = MagicMock()
+        icp.get_param.side_effect = lambda key, default=False: icp_params.get(key, default)
+        icp.set_param = MagicMock()
+
+        mail_model = MagicMock()
+        mail_instance = MagicMock()
+        mail_model.create.return_value = mail_instance
+
+        def env_getitem(key):
+            if key == 'ir.config_parameter':
+                mock_model = MagicMock()
+                mock_model.sudo.return_value = icp
+                return mock_model
+            if key == 'mail.mail':
+                mock_model = MagicMock()
+                mock_model.sudo.return_value = mail_model
+                return mock_model
+            return MagicMock()
+
+        env.__getitem__ = MagicMock(side_effect=env_getitem)
+        cron.env = env
+        return cron, icp, mail_model, mail_instance
+
+    def test_alert_suppressed_within_cooldown(self):
+        """Alert is not sent if the last alert was less than _ALERT_COOLDOWN_SECONDS ago."""
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+        cron, icp, mail_model, _ = self._make_cron_with_icp({
+            'mml.cron_alert_email': 'ops@example.com',
+            'mml_3pl.last_alert.stock_3pl_mainfreight': recent,
+        })
+
+        cron._send_cron_alert('stock_3pl_mainfreight', 'Test subject', 'Test body')
+
+        mail_model.create.assert_not_called()
+
+    def test_alert_sent_after_cooldown_expires(self):
+        """Alert is sent when the last alert was more than _ALERT_COOLDOWN_SECONDS ago."""
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(seconds=7200)).isoformat()
+        cron, icp, mail_model, mail_instance = self._make_cron_with_icp({
+            'mml.cron_alert_email': 'ops@example.com',
+            'mml_3pl.last_alert.stock_3pl_mainfreight': old,
+        })
+
+        cron._send_cron_alert('stock_3pl_mainfreight', 'Test subject', 'Test body')
+
+        mail_model.create.assert_called_once()
+        mail_instance.send.assert_called_once()
+
+    def test_alert_sent_when_no_prior_timestamp(self):
+        """Alert is sent on the first call (no stored timestamp)."""
+        cron, icp, mail_model, mail_instance = self._make_cron_with_icp({
+            'mml.cron_alert_email': 'ops@example.com',
+        })
+
+        cron._send_cron_alert('stock_3pl_mainfreight', 'First alert', 'body')
+
+        mail_model.create.assert_called_once()
+
+    def test_timestamp_written_after_successful_send(self):
+        """ir.config_parameter.set_param is called with the cooldown key after a successful send."""
+        cron, icp, mail_model, _ = self._make_cron_with_icp({
+            'mml.cron_alert_email': 'ops@example.com',
+        })
+
+        cron._send_cron_alert('stock_3pl_mainfreight', 'subj', 'body')
+
+        set_calls = [c for c in icp.set_param.call_args_list
+                     if c[0][0] == 'mml_3pl.last_alert.stock_3pl_mainfreight']
+        self.assertEqual(len(set_calls), 1)
+
+    def test_timestamp_not_written_when_send_raises(self):
+        """set_param is NOT called if mail.mail.send() raises."""
+        cron, icp, mail_model, mail_instance = self._make_cron_with_icp({
+            'mml.cron_alert_email': 'ops@example.com',
+        })
+        mail_instance.send.side_effect = Exception('SMTP failure')
+
+        cron._send_cron_alert('stock_3pl_mainfreight', 'subj', 'body')
+
+        set_calls = [c for c in icp.set_param.call_args_list
+                     if c[0][0] == 'mml_3pl.last_alert.stock_3pl_mainfreight']
+        self.assertEqual(len(set_calls), 0)
+
+    def test_body_is_html_escaped(self):
+        """HTML special characters in body are escaped before insertion into <pre>."""
+        cron, icp, mail_model, _ = self._make_cron_with_icp({
+            'mml.cron_alert_email': 'ops@example.com',
+        })
+
+        cron._send_cron_alert('stock_3pl_mainfreight', 'subj', '<script>alert(1)</script>')
+
+        create_kwargs = mail_model.create.call_args[0][0]
+        self.assertIn('&lt;script&gt;', create_kwargs['body_html'])
+        self.assertNotIn('<script>', create_kwargs['body_html'])
+
+    def test_malformed_stored_timestamp_sends_alert(self):
+        """A malformed stored timestamp does not suppress the alert (fail-open)."""
+        cron, icp, mail_model, _ = self._make_cron_with_icp({
+            'mml.cron_alert_email': 'ops@example.com',
+            'mml_3pl.last_alert.stock_3pl_mainfreight': 'not-a-datetime',
+        })
+
+        cron._send_cron_alert('stock_3pl_mainfreight', 'subj', 'body')
+
+        mail_model.create.assert_called_once()
+
+    def test_no_alert_when_email_not_configured(self):
+        """When mml.cron_alert_email is not set, _send_cron_alert returns without sending."""
+        cron, icp, mail_model, _ = self._make_cron_with_icp({})
+
+        cron._send_cron_alert('stock_3pl_mainfreight', 'subj', 'body')
+
+        mail_model.create.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
