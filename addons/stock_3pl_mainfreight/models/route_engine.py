@@ -7,9 +7,6 @@ from odoo.addons.stock_3pl_mainfreight.utils.haversine import sort_warehouses_by
 
 _logger = logging.getLogger(__name__)
 
-# Log any discrepancy between Odoo quant figures and MF SOH API figures.
-_SOH_DRIFT_LOG_THRESHOLD = 0
-
 
 class MFRouteEngine(models.AbstractModel):
     """Service model for Mainfreight warehouse routing decisions.
@@ -203,7 +200,7 @@ class MFRouteEngine(models.AbstractModel):
                 continue
             odoo_qty = result[product]
             drift = abs(mf_qty - odoo_qty)
-            if drift > _SOH_DRIFT_LOG_THRESHOLD:
+            if drift > self._get_soh_drift_threshold():
                 _logger.warning(
                     '_check_stock: SOH drift detected for product %s (code=%s) '
                     'at warehouse %s — Odoo qty=%.2f, MF qty=%.2f. Using MF figure.',
@@ -212,6 +209,23 @@ class MFRouteEngine(models.AbstractModel):
                 result[product] = mf_qty
 
         return result
+
+    @api.model
+    def _get_soh_drift_threshold(self):
+        """
+        Minimum absolute qty difference that triggers a SOH warning log.
+        Default 0 = log all diffs. Increase post-go-live to reduce noise.
+        Configure via Settings > Technical > Parameters > System Parameters:
+          key: mml_3pl.soh_drift_threshold
+          value: 1.0  (or whatever threshold makes sense)
+        """
+        try:
+            val = self.env['ir.config_parameter'].sudo().get_param(
+                'mml_3pl.soh_drift_threshold', '0'
+            )
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
 
     @api.model
     def _order_lines(self, order):
