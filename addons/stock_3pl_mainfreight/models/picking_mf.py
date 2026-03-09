@@ -48,6 +48,17 @@ class StockPickingMF(models.Model):
              'different 3PL connector. The push cron will use this connector when '
              're-creating the 3pl.message for this picking.',
     )
+    # SO Dispatch Tracking — populated by Phase 0 of the tracking cron
+    x_mf_outbound_ref = fields.Char(
+        'MF Outbound Ref', copy=False,
+        help='OutboundReference assigned by Mainfreight when they receive the outbound order. '
+             'Used as the chained reference query key until the connote is known.',
+    )
+    x_mf_tracking_url = fields.Char(
+        'MF Tracking URL', copy=False,
+        help='Live transport tracking link returned by the Mainfreight Tracking API. '
+             'Separate from x_mf_pod_url (post-delivery proof of delivery).',
+    )
 
     def action_approve_cross_border(self):
         """Release cross-border held pickings for MF push.
