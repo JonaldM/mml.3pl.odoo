@@ -22,7 +22,7 @@
                                 type="action"
                                 class="oe_stat_button"
                                 icon="fa-envelope"
-                                context="{'default_connector_id': active_id, 'search_default_connector_id': active_id}">
+                                context="{'default_connector_id': id, 'search_default_connector_id': id}">
                             <field name="message_count" widget="statinfo" string="Messages"/>
                         </button>
                     </div>

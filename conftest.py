@@ -208,47 +208,56 @@ def _install_odoo_stubs():
     sys.modules['odoo.addons'] = odoo_addons
     odoo.addons = odoo_addons
 
-    # Pre-load stock_3pl_core's pure-Python document_base so that
-    # stock_3pl_mainfreight document builders can import AbstractDocument.
-    def _load_real_module(full_name, file_path):
-        """Load a real Python file as a sys.modules entry under the given name."""
-        if full_name in sys.modules:
-            return sys.modules[full_name]
-        spec = importlib.util.spec_from_file_location(full_name, file_path)
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full_name] = mod
-        spec.loader.exec_module(mod)
-        return mod
+_install_odoo_stubs()
 
+
+def _load_real_module(full_name, file_path):
+    """Load a real Python file as a sys.modules entry under the given name."""
+    if full_name in sys.modules:
+        return sys.modules[full_name]
+    spec = importlib.util.spec_from_file_location(full_name, file_path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[full_name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _wire_3pl_addons():
+    """Register stock_3pl_core and stock_3pl_mainfreight into the odoo.addons namespace.
+
+    Called unconditionally so it always overwrites any wrong-path stubs that the
+    repo-root conftest may have registered (root conftest uses mml.odoo.apps/addons/
+    which does not exist; this conftest uses the correct workspace-relative path).
+    """
     _core = _ADDONS / 'stock_3pl_core'
-
-    # Register stub package entries for the addon namespaces.
-    # Set __path__ on each so Python can resolve real submodule imports from disk
-    # (e.g. odoo.addons.stock_3pl_mainfreight.document.product_spec).
     _mf = _ADDONS / 'stock_3pl_mainfreight'
+
     for pkg_name, real_path in (
         ('odoo.addons.stock_3pl_core', _core),
         ('odoo.addons.stock_3pl_core.models', _core / 'models'),
         ('odoo.addons.stock_3pl_core.utils', _core / 'utils'),
+        ('odoo.addons.stock_3pl_core.services', _core / 'services'),
+        ('odoo.addons.stock_3pl_core.transport', _core / 'transport'),
         ('odoo.addons.stock_3pl_mainfreight', _mf),
         ('odoo.addons.stock_3pl_mainfreight.document', _mf / 'document'),
         ('odoo.addons.stock_3pl_mainfreight.models', _mf / 'models'),
         ('odoo.addons.stock_3pl_mainfreight.transport', _mf / 'transport'),
+        ('odoo.addons.stock_3pl_mainfreight.utils', _mf / 'utils'),
+        ('odoo.addons.stock_3pl_mainfreight.wizard', _mf / 'wizard'),
     ):
-        if pkg_name not in sys.modules:
-            pkg = types.ModuleType(pkg_name)
-            pkg.__path__ = [str(real_path)]
-            pkg.__package__ = pkg_name
-            sys.modules[pkg_name] = pkg
+        pkg = types.ModuleType(pkg_name)
+        pkg.__path__ = [str(real_path)]
+        pkg.__package__ = pkg_name
+        sys.modules[pkg_name] = pkg
 
-    # Load document_base directly so AbstractDocument is available
+    # Load document_base directly so AbstractDocument is available for document builders
     _load_real_module(
         'odoo.addons.stock_3pl_core.models.document_base',
         _core / 'models' / 'document_base.py',
     )
 
 
-_install_odoo_stubs()
+_wire_3pl_addons()
 
 
 def pytest_collection_modifyitems(config, items):

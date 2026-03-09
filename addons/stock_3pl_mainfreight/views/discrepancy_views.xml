@@ -111,7 +111,7 @@
                 <filter string="Open" name="open" domain="[('state','=','open')]"/>
                 <filter string="Investigated" name="investigated"
                         domain="[('state','=','investigated')]"/>
-                <group expand="0" string="Group By">
+                <group>
                     <filter string="Warehouse" name="by_warehouse"
                             context="{'group_by': 'warehouse_id'}"/>
                 </group>

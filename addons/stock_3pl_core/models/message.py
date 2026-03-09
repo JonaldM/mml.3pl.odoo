@@ -42,6 +42,7 @@ ALL_STATES = [
 
 class ThreePlMessage(models.Model):
     _name = '3pl.message'
+    _table = 'stock_3pl_message'
     _description = '3PL Message Queue'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'create_date desc'

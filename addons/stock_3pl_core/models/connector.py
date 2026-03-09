@@ -20,6 +20,7 @@ ENVIRONMENT_SELECTION = [
 
 class ThreePlConnector(models.Model):
     _name = '3pl.connector'
+    _table = 'stock_3pl_connector'
     _description = '3PL Warehouse Connector'
     _order = 'priority asc, name asc'
 
@@ -106,6 +107,24 @@ class ThreePlConnector(models.Model):
         for field in self._CREDENTIAL_FIELDS:
             if field in vals and vals[field]:
                 vals[field] = encrypt_credential(self.env, vals[field])
+
+    def action_test_connection(self):
+        """Test the connector's transport configuration. Returns a notification action."""
+        self.ensure_one()
+        try:
+            transport = self._get_transport()
+            transport.test_connection()
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {'message': 'Connection successful', 'type': 'success'},
+            }
+        except Exception as e:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {'message': f'Connection failed: {e}', 'type': 'danger'},
+            }
 
     def get_credential(self, field_name):
         """Return the decrypted value of a credential field.

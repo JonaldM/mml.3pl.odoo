@@ -25,7 +25,7 @@
             </xpath>
 
             <!-- MF details tab — only shown when this picking has MF routing -->
-            <xpath expr="//page[@name='additional_info']" position="before">
+            <xpath expr="//page[@name='extra']" position="before">
                 <page string="Mainfreight"
                       invisible="not x_mf_status">
                     <group>

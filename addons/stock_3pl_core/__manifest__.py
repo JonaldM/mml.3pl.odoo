@@ -10,8 +10,8 @@
     'data': [
         'security/ir.model.access.csv',
         'data/cron.xml',
-        'views/connector_views.xml',
         'views/message_views.xml',
+        'views/connector_views.xml',
         'views/menu.xml',
     ],
     'author': 'MML Consumer Products Ltd',
