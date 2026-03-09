@@ -138,8 +138,21 @@ class MFTrackingCron(models.AbstractModel):
             return
 
         connote = result['connote']
-        tracking_url = result.get('tracking_url', '')
-        status = result.get('status', 'mf_dispatched')
+
+        # Validate tracking_url — https-only (consistent with _build_phase1_write_vals)
+        raw_url = result.get('tracking_url', '')
+        tracking_url = (
+            raw_url
+            if isinstance(raw_url, str) and raw_url.startswith('https://')
+            else ''
+        )
+
+        # Validate status — must be a known MF status; default to mf_dispatched
+        raw_status = result.get('status', 'mf_dispatched')
+        if raw_status in _TRACKABLE_STATUSES or raw_status in _TERMINAL_STATUSES:
+            status = raw_status
+        else:
+            status = 'mf_dispatched'
 
         write_vals = {
             'x_mf_connote': connote,

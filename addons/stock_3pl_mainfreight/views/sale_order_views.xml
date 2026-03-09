@@ -7,7 +7,7 @@
         <field name="arch" type="xml">
             <xpath expr="//page[@name='order_line']" position="before">
                 <group name="mf_tracking_group" string="Mainfreight Dispatch"
-                       attrs="{'invisible': [('x_mf_tracking_url', '=', False)]}">
+                       attrs="{'invisible': [('x_mf_tracking_url', 'in', [False, ''])]}">
                     <field name="x_mf_delivery_status" string="Delivery Status" readonly="1"
                            attrs="{'invisible': [('x_mf_delivery_status', '=', False)]}"/>
                     <field name="x_mf_tracking_url" widget="url" string="Track Shipment"
