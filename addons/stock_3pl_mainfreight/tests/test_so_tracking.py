@@ -133,3 +133,25 @@ class TestPhaseZeroCronTargeting:
             'x_mf_outbound_ref': 'OUT-001',
         })()
         assert _phase0_should_target(picking) is False
+
+
+class TestPhaseOneTrackingUrl:
+
+    def test_phase1_writes_tracking_url_if_returned(self):
+        from odoo.addons.stock_3pl_mainfreight.models.tracking_cron import _build_phase1_write_vals
+        result = {
+            'status': 'mf_in_transit',
+            'tracking_url': 'https://track.mainfreight.com/MF999',
+        }
+        vals = _build_phase1_write_vals(result, current_status='mf_dispatched')
+        assert 'x_mf_tracking_url' in vals
+        assert vals['x_mf_tracking_url'] == 'https://track.mainfreight.com/MF999'
+
+    def test_phase1_rejects_non_https_tracking_url(self):
+        from odoo.addons.stock_3pl_mainfreight.models.tracking_cron import _build_phase1_write_vals
+        result = {
+            'status': 'mf_in_transit',
+            'tracking_url': 'http://track.mainfreight.com/MF999',
+        }
+        vals = _build_phase1_write_vals(result, current_status='mf_dispatched')
+        assert 'x_mf_tracking_url' not in vals

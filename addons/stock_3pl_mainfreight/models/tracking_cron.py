@@ -33,6 +33,44 @@ def _phase0_should_target(picking) -> bool:
     )
 
 
+def _build_phase1_write_vals(result: dict, current_status: str) -> dict:
+    """Build the write_vals dict for Phase 1 (connote-based poll).
+
+    Validates status, pod_url, signed_by, delivered_at, and tracking_url.
+    Does not mutate result. Returns a new dict.
+    """
+    write_vals = {}
+
+    new_status = result.get('status')
+    if new_status:
+        if new_status not in _TRACKABLE_STATUSES and new_status not in _TERMINAL_STATUSES:
+            new_status = None
+    if new_status and current_status not in _TERMINAL_STATUSES:
+        write_vals['x_mf_status'] = new_status
+
+    pod_url = result.get('pod_url')
+    if pod_url:
+        if isinstance(pod_url, str) and pod_url.startswith('https://'):
+            write_vals['x_mf_pod_url'] = pod_url
+
+    raw_signed = result.get('signed_by')
+    if raw_signed:
+        signed_by = re.sub(r'[^\x20-\x7E]', '', str(raw_signed))[:128]
+        if signed_by:
+            write_vals['x_mf_signed_by'] = signed_by
+
+    delivered_at = result.get('delivered_at')
+    if delivered_at:
+        write_vals['x_mf_delivered_date'] = delivered_at
+
+    tracking_url = result.get('tracking_url')
+    if tracking_url:
+        if isinstance(tracking_url, str) and tracking_url.startswith('https://'):
+            write_vals['x_mf_tracking_url'] = tracking_url
+
+    return write_vals
+
+
 class MFTrackingCron(models.AbstractModel):
     """Cron service model for the Mainfreight tracking poll pipeline.
 
@@ -222,44 +260,6 @@ class MFTrackingCron(models.AbstractModel):
         if not result:
             return
 
-        write_vals = {}
-
-        new_status = result.get('status')
-        if new_status:
-            # Validate against known trackable statuses (not terminals — those stop tracking)
-            if new_status not in _TRACKABLE_STATUSES and new_status not in _TERMINAL_STATUSES:
-                _logger.warning(
-                    '_poll_and_update: unknown status %r from tracking API for picking %s — ignoring',
-                    new_status, picking.name,
-                )
-                new_status = None
-
-        if new_status and picking.x_mf_status not in _TERMINAL_STATUSES:
-            write_vals['x_mf_status'] = new_status
-
-        # Validate pod_url scheme — only allow https://
-        pod_url = result.get('pod_url')
-        if pod_url:
-            if not isinstance(pod_url, str) or not pod_url.startswith('https://'):
-                _logger.warning(
-                    '_poll_and_update: rejecting pod_url with unsafe scheme for picking %s: %r',
-                    picking.name, pod_url[:100],
-                )
-                pod_url = None
-
-        if pod_url:
-            write_vals['x_mf_pod_url'] = pod_url
-
-        raw_signed = result.get('signed_by')
-        if raw_signed:
-            raw = str(raw_signed)
-            signed_by = re.sub(r'[^\x20-\x7E]', '', raw)[:128]
-            if signed_by:
-                write_vals['x_mf_signed_by'] = signed_by
-
-        delivered_at = result.get('delivered_at')
-        if delivered_at:
-            write_vals['x_mf_delivered_date'] = delivered_at
-
+        write_vals = _build_phase1_write_vals(result, current_status=picking.x_mf_status)
         if write_vals:
             picking.write(write_vals)
