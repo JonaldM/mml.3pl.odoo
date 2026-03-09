@@ -7,7 +7,6 @@
         <field name="code">model._process_outbound_queue()</field>
         <field name="interval_number">5</field>
         <field name="interval_type">minutes</field>
-        <field name="numbercall">-1</field>
         <field name="active" eval="False"/>
     </record>
 
@@ -18,7 +17,6 @@
         <field name="code">model._poll_inbound()</field>
         <field name="interval_number">15</field>
         <field name="interval_type">minutes</field>
-        <field name="numbercall">-1</field>
         <field name="active" eval="False"/>
     </record>
 </odoo>

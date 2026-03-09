@@ -26,10 +26,10 @@ class ThreePlConnectorMF(models.Model):
     )
 
     # MF REST API secrets (separate per API type per MF spec)
-    mf_warehousing_secret = fields.Char('Warehousing API Secret', password=True, groups='stock.group_stock_manager')
-    mf_label_secret = fields.Char('Label API Secret', password=True, groups='stock.group_stock_manager')
-    mf_rating_secret = fields.Char('Rating API Secret', password=True, groups='stock.group_stock_manager')
-    mf_tracking_secret = fields.Char('Tracking API Secret', password=True, groups='stock.group_stock_manager')
+    mf_warehousing_secret = fields.Char('Warehousing API Secret', groups='stock.group_stock_manager')
+    mf_label_secret = fields.Char('Label API Secret', groups='stock.group_stock_manager')
+    mf_rating_secret = fields.Char('Rating API Secret', groups='stock.group_stock_manager')
+    mf_tracking_secret = fields.Char('Tracking API Secret', groups='stock.group_stock_manager')
     mf_region = fields.Char(
         'MF Region',
         default='ANZ',

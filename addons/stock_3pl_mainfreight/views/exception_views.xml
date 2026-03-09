@@ -58,7 +58,7 @@
                         type="object"
                         class="btn-primary"
                         invisible="x_mf_status != 'mf_exception'"/>
-                <button name="%(action_mf_reassign_wizard)d"
+                <button name="stock_3pl_mainfreight.action_mf_reassign_wizard"
                         string="Reassign Warehouse"
                         type="action"
                         invisible="x_mf_status not in ('mf_exception', 'mf_held_review')"/>
