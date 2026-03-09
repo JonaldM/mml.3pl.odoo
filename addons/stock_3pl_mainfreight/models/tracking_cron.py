@@ -24,6 +24,15 @@ _TERMINAL_STATUSES = ('mf_delivered', 'mf_exception')
 _ALERT_COOLDOWN_SECONDS = 3600
 
 
+def _phase0_should_target(picking) -> bool:
+    """Return True if this picking should be processed by the Phase 0 chained reference query."""
+    return (
+        picking.x_mf_status == 'mf_sent'
+        and not picking.x_mf_connote
+        and bool(picking.x_mf_outbound_ref)
+    )
+
+
 class MFTrackingCron(models.AbstractModel):
     """Cron service model for the Mainfreight tracking poll pipeline.
 
@@ -32,6 +41,86 @@ class MFTrackingCron(models.AbstractModel):
     """
     _name = 'mf.tracking.cron'
     _description = 'MF Tracking Cron'
+
+    @api.model
+    def _run_mf_tracking_phase0(self):
+        """Phase 0 — chained reference query.
+
+        Finds pickings with x_mf_status='mf_sent', no connote, and an outbound_ref set.
+        Queries the Mainfreight Tracking API by OutboundReference (chained mode).
+        If a linked transport consignment is returned, writes:
+          - x_mf_connote (enables Phase 1 to take over from next cycle)
+          - x_mf_tracking_url
+          - x_mf_status -> 'mf_dispatched'
+          - x_mf_dispatched_date -> now()
+        and posts a chatter note on the linked SO.
+
+        Per-picking errors are caught and logged.
+        """
+        pickings = self.env['stock.picking'].search([
+            ('x_mf_status', '=', 'mf_sent'),
+            ('x_mf_connote', '=', False),
+            ('x_mf_outbound_ref', '!=', False),
+        ])
+
+        for picking in pickings:
+            if not _phase0_should_target(picking):
+                continue
+            try:
+                self._phase0_process(picking)
+            except Exception as exc:
+                _logger.error(
+                    '_run_mf_tracking_phase0: error for picking %s (outbound_ref %s): %s',
+                    picking.name, picking.x_mf_outbound_ref, exc,
+                )
+                self._send_cron_alert(
+                    'stock_3pl_mainfreight',
+                    'Phase 0 tracking failed for picking %s (outbound_ref %s)' % (
+                        picking.name, picking.x_mf_outbound_ref),
+                    str(exc),
+                )
+
+    def _phase0_process(self, picking):
+        """Query by OutboundReference and write updates for a single picking."""
+        warehouse = picking.picking_type_id.warehouse_id
+        connector = self.env['3pl.connector'].search(
+            [('warehouse_id', '=', warehouse.id)], limit=1
+        )
+        if not connector:
+            _logger.warning(
+                '_phase0_process: no connector for warehouse %s (picking %s) — skipping',
+                warehouse.name if warehouse else 'unknown', picking.name,
+            )
+            return
+
+        result = connector.get_transport().get_tracking_by_outbound_ref(
+            picking.x_mf_outbound_ref
+        )
+        if not result or not result.get('connote'):
+            return
+
+        connote = result['connote']
+        tracking_url = result.get('tracking_url', '')
+        status = result.get('status', 'mf_dispatched')
+
+        write_vals = {
+            'x_mf_connote': connote,
+            'x_mf_status': status,
+            'x_mf_dispatched_date': datetime.now(timezone.utc).replace(tzinfo=None),
+        }
+        if tracking_url:
+            write_vals['x_mf_tracking_url'] = tracking_url
+        picking.write(write_vals)
+
+        # Post chatter on linked SO
+        sale = getattr(picking, 'sale_id', None)
+        if sale and tracking_url:
+            sale.message_post(
+                body='Order dispatched \u2014 Track your delivery: <a href="%s">%s</a>' % (
+                    tracking_url, tracking_url)
+            )
+        elif sale:
+            sale.message_post(body='Order dispatched by Mainfreight (connote: %s).' % connote)
 
     @api.model
     def _run_mf_tracking(self):
@@ -45,6 +134,8 @@ class MFTrackingCron(models.AbstractModel):
         Per-picking errors are caught and logged — one bad picking must not
         block the rest of the batch.
         """
+        self._run_mf_tracking_phase0()
+
         pickings = self.env['stock.picking'].search([
             ('x_mf_status', 'in', list(_TRACKABLE_STATUSES)),
             ('x_mf_connote', '!=', False),

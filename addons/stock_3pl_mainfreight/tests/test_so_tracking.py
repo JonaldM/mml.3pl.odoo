@@ -90,3 +90,46 @@ class TestSaleOrderComputedFields:
         order = FakeSaleOrder(pickings)
         _run_compute(order)
         assert order.x_mf_delivery_status == 'Sent to Warehouse'
+
+
+class TestPhaseZeroCronTargeting:
+
+    def test_phase0_method_exists(self):
+        from odoo.addons.stock_3pl_mainfreight.models.tracking_cron import MFTrackingCron
+        assert hasattr(MFTrackingCron, '_run_mf_tracking_phase0')
+
+    def test_phase0_targets_mf_sent_with_outbound_ref_no_connote(self):
+        from odoo.addons.stock_3pl_mainfreight.models.tracking_cron import _phase0_should_target
+        picking = type('P', (), {
+            'x_mf_status': 'mf_sent',
+            'x_mf_connote': False,
+            'x_mf_outbound_ref': 'OUT-001',
+        })()
+        assert _phase0_should_target(picking) is True
+
+    def test_phase0_skips_picking_with_connote(self):
+        from odoo.addons.stock_3pl_mainfreight.models.tracking_cron import _phase0_should_target
+        picking = type('P', (), {
+            'x_mf_status': 'mf_sent',
+            'x_mf_connote': 'MF123',
+            'x_mf_outbound_ref': 'OUT-001',
+        })()
+        assert _phase0_should_target(picking) is False
+
+    def test_phase0_skips_picking_with_no_outbound_ref(self):
+        from odoo.addons.stock_3pl_mainfreight.models.tracking_cron import _phase0_should_target
+        picking = type('P', (), {
+            'x_mf_status': 'mf_sent',
+            'x_mf_connote': False,
+            'x_mf_outbound_ref': False,
+        })()
+        assert _phase0_should_target(picking) is False
+
+    def test_phase0_skips_non_mf_sent(self):
+        from odoo.addons.stock_3pl_mainfreight.models.tracking_cron import _phase0_should_target
+        picking = type('P', (), {
+            'x_mf_status': 'mf_dispatched',
+            'x_mf_connote': False,
+            'x_mf_outbound_ref': 'OUT-001',
+        })()
+        assert _phase0_should_target(picking) is False
