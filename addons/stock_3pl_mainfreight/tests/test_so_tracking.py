@@ -18,3 +18,75 @@ class TestPickingMFFields:
     def test_x_mf_tracking_url_field_on_picking_exists(self):
         cls = self._get_model_class()
         assert hasattr(cls, 'x_mf_tracking_url'), "x_mf_tracking_url not defined on StockPickingMF"
+
+
+class FakePicking:
+    def __init__(self, picking_type_code, x_mf_status, x_mf_tracking_url='', x_mf_dispatched_date=None, id=0):
+        self.picking_type_code = picking_type_code
+        self.picking_type_id = self  # picking_type_id.picking_type_code
+        self.x_mf_status = x_mf_status
+        self.x_mf_tracking_url = x_mf_tracking_url
+        self.x_mf_dispatched_date = x_mf_dispatched_date
+        self.id = id
+
+
+class FakeSaleOrder:
+    def __init__(self, pickings):
+        self.picking_ids = pickings
+        self.x_mf_delivery_status = False
+        self.x_mf_tracking_url = False
+
+    def __iter__(self):
+        yield self
+
+
+def _run_compute(order):
+    """Invoke the compute method on a single FakeSaleOrder instance."""
+    from odoo.addons.stock_3pl_mainfreight.models.sale_order_mf import SaleOrderMFFields
+    SaleOrderMFFields._compute_mf_tracking_fields(order)
+
+
+class TestSaleOrderComputedFields:
+
+    def test_delivery_status_empty_when_no_pickings(self):
+        order = FakeSaleOrder([])
+        _run_compute(order)
+        assert order.x_mf_delivery_status == ''
+
+    def test_tracking_url_empty_when_no_pickings(self):
+        order = FakeSaleOrder([])
+        _run_compute(order)
+        assert order.x_mf_tracking_url == ''
+
+    def test_delivery_status_most_advanced(self):
+        pickings = [
+            FakePicking('outgoing', 'mf_dispatched', 'https://track.mf.com/1', id=1),
+            FakePicking('outgoing', 'mf_in_transit', 'https://track.mf.com/2', id=2),
+            FakePicking('outgoing', 'mf_sent', '', id=3),
+        ]
+        order = FakeSaleOrder(pickings)
+        _run_compute(order)
+        assert order.x_mf_delivery_status == 'In Transit'
+
+    def test_tracking_url_from_most_recently_dispatched(self):
+        import datetime
+        pickings = [
+            FakePicking('outgoing', 'mf_dispatched',
+                        'https://track.mf.com/1',
+                        datetime.datetime(2026, 3, 1), id=1),
+            FakePicking('outgoing', 'mf_dispatched',
+                        'https://track.mf.com/2',
+                        datetime.datetime(2026, 3, 5), id=2),
+        ]
+        order = FakeSaleOrder(pickings)
+        _run_compute(order)
+        assert order.x_mf_tracking_url == 'https://track.mf.com/2'
+
+    def test_ignores_non_outgoing_pickings(self):
+        pickings = [
+            FakePicking('incoming', 'mf_delivered', 'https://track.mf.com/in', id=1),
+            FakePicking('outgoing', 'mf_sent', '', id=2),
+        ]
+        order = FakeSaleOrder(pickings)
+        _run_compute(order)
+        assert order.x_mf_delivery_status == 'Sent to Warehouse'
