@@ -467,7 +467,12 @@ class TestRunMFTrackingUpdatesPicking(unittest.TestCase):
         self.assertNotIn('x_mf_delivered_date', write_vals)
 
     def test_search_domain_includes_trackable_statuses_and_connote(self):
-        """search is called with x_mf_connote != False and the correct status list."""
+        """Phase 1 search is called with x_mf_connote != False and the correct status list.
+
+        _run_mf_tracking() makes two search calls: Phase 0 (connote absent,
+        outbound_ref present) then Phase 1 (connote present).  This test
+        verifies the Phase 1 domain only.
+        """
         mock_picking_model = MagicMock()
         mock_picking_model.search.return_value = []
 
@@ -479,18 +484,29 @@ class TestRunMFTrackingUpdatesPicking(unittest.TestCase):
         cron = _make_cron(env_lookup=env_lookup)
         cron._run_mf_tracking()
 
-        mock_picking_model.search.assert_called_once()
-        domain = mock_picking_model.search.call_args[0][0]
+        # Expect at least two search calls (Phase 0 + Phase 1).
+        self.assertGreaterEqual(mock_picking_model.search.call_count, 2)
+
+        # Find the Phase 1 call: domain contains ('x_mf_connote', '!=', False).
+        phase1_domain = None
+        for call in mock_picking_model.search.call_args_list:
+            domain = call[0][0]
+            connote_tuples = [t for t in domain if isinstance(t, tuple) and t[0] == 'x_mf_connote']
+            if connote_tuples and connote_tuples[0][1] == '!=':
+                phase1_domain = domain
+                break
+
+        self.assertIsNotNone(phase1_domain, "Phase 1 search call not found")
 
         status_tuple = next(
-            (t for t in domain if isinstance(t, tuple) and t[0] == 'x_mf_status'), None
+            (t for t in phase1_domain if isinstance(t, tuple) and t[0] == 'x_mf_status'), None
         )
         self.assertIsNotNone(status_tuple)
         for status in ('mf_sent', 'mf_received', 'mf_dispatched', 'mf_in_transit', 'mf_out_for_delivery'):
             self.assertIn(status, status_tuple[2])
 
         connote_tuple = next(
-            (t for t in domain if isinstance(t, tuple) and t[0] == 'x_mf_connote'), None
+            (t for t in phase1_domain if isinstance(t, tuple) and t[0] == 'x_mf_connote'), None
         )
         self.assertIsNotNone(connote_tuple)
         self.assertEqual(connote_tuple[1], '!=')
