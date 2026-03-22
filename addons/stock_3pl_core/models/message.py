@@ -82,18 +82,14 @@ class ThreePlMessage(models.Model):
     # PostgreSQL treats each NULL as distinct, so these constraints only enforce
     # uniqueness for non-null keys. Messages without a key/hash are intentionally
     # exempt — they are not subject to deduplication.
-    _sql_constraints = [
-        (
-            'unique_idempotency_key',
-            'UNIQUE(connector_id, idempotency_key)',
-            'An outbound message with this idempotency key already exists for this connector.',
-        ),
-        (
-            'unique_source_hash',
-            'UNIQUE(connector_id, source_hash)',
-            'An inbound message with this payload hash already exists for this connector.',
-        ),
-    ]
+    _unique_idempotency_key = models.Constraint(
+        'UNIQUE(connector_id, idempotency_key)',
+        'An outbound message with this idempotency key already exists for this connector.',
+    )
+    _unique_source_hash = models.Constraint(
+        'UNIQUE(connector_id, source_hash)',
+        'An inbound message with this payload hash already exists for this connector.',
+    )
 
     # --- Outbound state transitions ---
 

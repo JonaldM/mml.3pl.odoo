@@ -180,7 +180,7 @@
     <record id="action_3pl_connector" model="ir.actions.act_window">
         <field name="name">3PL Connectors</field>
         <field name="res_model">3pl.connector</field>
-        <field name="view_mode">kanban,tree,form</field>
+        <field name="view_mode">kanban,list,form</field>
     </record>
 
 </odoo>

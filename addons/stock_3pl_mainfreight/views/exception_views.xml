@@ -80,14 +80,14 @@
     <record id="action_mf_cross_border_held" model="ir.actions.act_window">
         <field name="name">Cross-Border — Awaiting Approval</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="domain">[('x_mf_status', '=', 'mf_held_review')]</field>
     </record>
 
     <record id="action_mf_exceptions" model="ir.actions.act_window">
         <field name="name">Exception Queue</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_mf_exception_tree"/>
         <field name="domain">[('x_mf_status', 'in', ['mf_exception'])]</field>
         <field name="context">{'search_default_group_assigned': 0}</field>
@@ -96,7 +96,7 @@
     <record id="action_mf_order_pipeline" model="ir.actions.act_window">
         <field name="name">Order Pipeline</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">kanban,tree,form</field>
+        <field name="view_mode">kanban,list,form</field>
         <field name="domain">[('x_mf_status', 'not in', [False, 'draft'])]</field>
         <field name="view_ids"
                eval="[(5, 0, 0), (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_mf_pipeline_kanban')})]"/>

@@ -91,7 +91,7 @@
     <record id="action_3pl_message_all" model="ir.actions.act_window">
         <field name="name">3PL Message Queue</field>
         <field name="res_model">3pl.message</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
     </record>
 
     <!-- ================================================================
@@ -100,7 +100,7 @@
     <record id="action_3pl_message_dead" model="ir.actions.act_window">
         <field name="name">Dead Letters</field>
         <field name="res_model">3pl.message</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="domain">[('state', '=', 'dead')]</field>
     </record>
 
