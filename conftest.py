@@ -122,6 +122,8 @@ def _install_odoo_stubs():
     odoo_models.Model = Model
     odoo_models.AbstractModel = AbstractModel
     odoo_models.TransientModel = TransientModel
+    # Odoo 19: models.Constraint — no-op in structural tests (real SQL constraint not needed)
+    odoo_models.Constraint = lambda *a, **kw: None
 
     # ---- odoo.api ----
     odoo_api = types.ModuleType('odoo.api')

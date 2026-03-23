@@ -1,5 +1,6 @@
 # addons/stock_3pl_core/models/message.py
 from odoo import models, fields, api
+import datetime
 import hashlib
 import logging
 
@@ -74,6 +75,7 @@ class ThreePlMessage(models.Model):
     # Retry
     retry_count = fields.Integer(default=0)
     last_error = fields.Text('Last Error')
+    next_retry_at = fields.Datetime('Next Retry At', index=True)
 
     # Timestamps
     sent_at = fields.Datetime('Sent At', readonly=True)
@@ -94,7 +96,7 @@ class ThreePlMessage(models.Model):
     # --- Outbound state transitions ---
 
     def action_queue(self):
-        self.write({'state': 'queued'})
+        self.write({'state': 'queued', 'next_retry_at': False})
 
     def action_sending(self):
         self.write({'state': 'sending'})
@@ -106,19 +108,28 @@ class ThreePlMessage(models.Model):
         self.write({'state': 'acknowledged', 'acked_at': fields.Datetime.now()})
 
     def action_fail(self, error_msg):
-        """Retry if under MAX_RETRIES, otherwise dead-letter."""
+        """Retry if under MAX_RETRIES, otherwise dead-letter.
+
+        On retry, sets next_retry_at using exponential backoff:
+        delay = min(2 ** retry_count * 60, 3600) seconds (60s, 120s, 240s... capped at 1h).
+        The cron dispatcher skips messages where next_retry_at > now.
+        """
         for msg in self:
             if msg.retry_count + 1 >= MAX_RETRIES:
                 msg._dead_letter(error_msg)
             else:
+                new_retry_count = msg.retry_count + 1
+                delay_seconds = min(2 ** msg.retry_count * 60, 3600)
+                next_retry = fields.Datetime.now() + datetime.timedelta(seconds=delay_seconds)
                 _logger.warning(
-                    '3PL message %s retry %s/%s: %s',
-                    msg.id, msg.retry_count + 1, MAX_RETRIES, error_msg,
+                    '3PL message %s retry %s/%s (next at %s): %s',
+                    msg.id, new_retry_count, MAX_RETRIES, next_retry, error_msg,
                 )
                 msg.write({
                     'state': 'queued',
-                    'retry_count': msg.retry_count + 1,
+                    'retry_count': new_retry_count,
                     'last_error': error_msg,
+                    'next_retry_at': next_retry,
                 })
 
     def action_validation_fail(self, error_msg):
@@ -128,7 +139,7 @@ class ThreePlMessage(models.Model):
 
     def action_requeue(self):
         """Manual requeue from dead letter."""
-        self.write({'state': 'queued', 'retry_count': 0, 'last_error': False})
+        self.write({'state': 'queued', 'retry_count': 0, 'last_error': False, 'next_retry_at': False})
 
     def _dead_letter(self, error_msg):
         self.ensure_one()
@@ -182,9 +193,13 @@ class ThreePlMessage(models.Model):
         - On validation failure: dead-letters immediately (no retry)
         - On retriable failure: increments retry_count or dead-letters at MAX_RETRIES
         """
+        now = fields.Datetime.now()
         candidates = self.search([
             ('direction', '=', 'outbound'),
             ('state', 'in', ['queued', 'sending']),
+            '|',
+            ('next_retry_at', '=', False),
+            ('next_retry_at', '<=', now),
         ])
         for msg in candidates:
             # Re-check state to guard against concurrent cron runs picking up the
