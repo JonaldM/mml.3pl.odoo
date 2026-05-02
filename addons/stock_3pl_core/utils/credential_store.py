@@ -98,4 +98,9 @@ def decrypt_credential(env, value: str) -> str:
             'decrypt_credential: failed to decrypt — key may have changed. '
             'Re-enter credentials on the connector. Error: %s', exc
         )
-        return ''
+        from odoo.exceptions import UserError
+        raise UserError(
+            'Failed to decrypt connector credential. The encryption key may have changed. '
+            'Please re-enter the credential on the connector record and save. '
+            f'Technical detail: {str(exc)[:200]}'
+        )

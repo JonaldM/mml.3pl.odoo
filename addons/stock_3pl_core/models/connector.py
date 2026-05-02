@@ -112,7 +112,7 @@ class ThreePlConnector(models.Model):
         """Test the connector's transport configuration. Returns a notification action."""
         self.ensure_one()
         try:
-            transport = self._get_transport()
+            transport = self.get_transport()
             transport.test_connection()
             return {
                 'type': 'ir.actions.client',

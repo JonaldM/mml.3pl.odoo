@@ -201,12 +201,27 @@ class ThreePlMessage(models.Model):
             ('next_retry_at', '=', False),
             ('next_retry_at', '<=', now),
         ])
-        for msg in candidates:
-            # Re-check state to guard against concurrent cron runs picking up the
-            # same record. A fresh read ensures we see the committed DB state.
-            msg.invalidate_recordset()
-            if msg.state not in ('queued', 'sending'):
-                continue
+        if not candidates:
+            return
+
+        # Atomically claim records for this worker using FOR UPDATE SKIP LOCKED.
+        # Any row already locked by a concurrent cron worker is silently skipped,
+        # preventing two workers from sending the same message.
+        self.env.cr.execute(
+            """
+            SELECT id FROM stock_3pl_message
+            WHERE id = ANY(%s)
+              AND state IN ('queued', 'sending')
+              AND (next_retry_at IS NULL OR next_retry_at <= %s)
+            FOR UPDATE SKIP LOCKED
+            """,
+            [candidates.ids, now],
+        )
+        locked_ids = [row[0] for row in self.env.cr.fetchall()]
+        if not locked_ids:
+            return
+
+        for msg in self.browse(locked_ids):
             try:
                 msg.action_sending()
                 transport = msg.connector_id.get_transport()
